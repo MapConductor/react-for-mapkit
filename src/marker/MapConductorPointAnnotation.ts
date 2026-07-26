@@ -23,9 +23,15 @@ export function createMapConductorPointAnnotation(
   const width = bitmapIcon.size.width;
   const height = bitmapIcon.size.height;
 
-  // MapKit anchors an image annotation at its bottom-center by default; shift it
-  // so the bitmap's own (anchor.x, anchor.y) fraction sits on the coordinate.
-  const anchorOffset = new DOMPoint((0.5 - bitmapIcon.anchor.x) * width, (1 - bitmapIcon.anchor.y) * height);
+  // MapKit anchors an ImageAnnotation at its bottom-center by default, and its
+  // anchorOffset uses a y-up coordinate system (+y moves the image up). Shift the
+  // image so the bitmap's own (anchor.x, anchor.y) fraction sits on the
+  // coordinate: for a bottom anchor (y=1) no vertical shift is needed, and a
+  // centered anchor (y=0.5) is lifted by half the height.
+  const anchorOffset = new DOMPoint(
+    (0.5 - bitmapIcon.anchor.x) * width,
+    (bitmapIcon.anchor.y - 1) * height,
+  );
 
   const data: MapConductorPointAnnotationData = {
     markerId: markerState.id,

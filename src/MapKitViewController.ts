@@ -91,6 +91,11 @@ export class MapKitViewController
     this.holder.setController(this);
     this.mapDesignType = mapDesignType;
     this.logicalTiltHint = logicalTiltHint;
+    // Tiled markers render into a raster overlay driven by the raster controller.
+    this.markerController.onRasterLayerUpdate = async (state) => {
+      if (state) await this.rasterLayerController.composition([state]);
+      else await this.rasterLayerController.clear();
+    };
     this.setupEventListeners();
     // MapKit JS maps are usable immediately after construction; announce
     // readiness on the next microtask so listeners set up right after can fire.
@@ -113,6 +118,10 @@ export class MapKitViewController
       if (this.lastCameraTarget && this.measureGoogleZoom() != null) {
         this.initialAltitudeCorrected = true;
         void this.moveCamera(this.lastCameraTarget);
+        // Seed the overlay controllers with the settled camera so click
+        // hit-testing works before the user moves the map.
+        const camera = this.getCameraPosition();
+        if (camera) this.forwardCameraToOverlays(camera);
         return;
       }
       if (++attempts > 120) return;
@@ -169,11 +178,17 @@ export class MapKitViewController
     if (this.moving) return;
     this.moving = true;
     const camera = this.getCameraPosition();
-    if (camera) this.notifyCameraMoveStart(camera);
+    if (camera) {
+      this.forwardCameraToOverlays(camera);
+      this.notifyCameraMoveStart(camera);
+    }
     const tick = () => {
       if (!this.moving) return;
       const current = this.getCameraPosition();
-      if (current) this.notifyCameraMove(current);
+      if (current) {
+        this.forwardCameraToOverlays(current);
+        this.notifyCameraMove(current);
+      }
       this.groundImageController.redraw();
       this.rafId = requestAnimationFrame(tick);
     };
@@ -187,10 +202,20 @@ export class MapKitViewController
     this.rafId = null;
     const camera = this.getCameraPosition();
     if (camera) {
+      this.forwardCameraToOverlays(camera);
       this.notifyCameraMove(camera);
       this.notifyCameraMoveEnd(camera);
     }
     this.groundImageController.redraw();
+  }
+
+  // MapKit has no continuous move event and never fed the overlay controllers a
+  // camera, so PolylineController.currentCameraPosition stayed null and polyline
+  // click hit-testing sized its tap tolerance at zoom 0 (a ~thousands-of-km
+  // band). Forward the live camera so the tolerance is computed from the real
+  // zoom, mirroring notifyControllersCameraChanged in the other providers.
+  private forwardCameraToOverlays(camera: MapCameraPosition): void {
+    void this.polylineController.onCameraChanged(camera);
   }
 
   private handleSingleTap(event: mapkit.EventBase<mapkit.Map>): void {
@@ -201,6 +226,15 @@ export class MapKitViewController
     if (this.handlePolygonClick(point)) return;
     if (this.handlePolylineClick(point)) return;
     if (this.handleGroundImageClick(point)) return;
+
+    // Tiled markers are drawn into a raster overlay (no annotation to receive a
+    // select event), so hit-test them here — mirrors the Leaflet/Azure controllers.
+    const camera = this.getCameraPosition();
+    const tiled = this.markerController.findTiled(point, camera?.zoom ?? 0);
+    if (tiled?.state.clickable) {
+      this.markerController.dispatchClick(tiled.state);
+      return;
+    }
 
     this.notifyMapClick(point);
   }
@@ -260,7 +294,7 @@ export class MapKitViewController
       // approximate with the constant converter. The initial-altitude correction
       // re-applies this exactly once the map has a size.
       this.map.center = new mapkit.Coordinate(position.position.latitude, position.position.longitude);
-      this.map.cameraDistance = this.converter.zoomLevelToAltitude({ zoomLevel: position.zoom, latitude: position.position.latitude, tilt: 0 });
+      this.map.cameraDistance = this.converter.zoomLevelToAltitude({ zoomLevel: snapZoomToGoogle(position.zoom), latitude: position.position.latitude, tilt: 0 });
     }
     this.setRotation(position.bearing);
     return Promise.resolve(true);
@@ -278,7 +312,7 @@ export class MapKitViewController
       this.map.setRegionAnimated(region, true);
     } else {
       this.map.setCenterAnimated(new mapkit.Coordinate(position.position.latitude, position.position.longitude), true);
-      this.map.setCameraDistanceAnimated(this.converter.zoomLevelToAltitude({ zoomLevel: position.zoom, latitude: position.position.latitude, tilt: 0 }), true);
+      this.map.setCameraDistanceAnimated(this.converter.zoomLevelToAltitude({ zoomLevel: snapZoomToGoogle(position.zoom), latitude: position.position.latitude, tilt: 0 }), true);
     }
     // Only touch rotation when it actually changes, so it doesn't cancel the
     // region animation above. Fly-to keeps bearing at 0, so this is usually a no-op.
@@ -373,7 +407,13 @@ export class MapKitViewController
     if (width <= 0 || height <= 0) return null;
 
     const latitude = position.position.latitude;
-    const degreesPerPixel = 360 / (TILE_SIZE * Math.pow(2, position.zoom));
+    // Google Maps 2D (the project-wide reference) snaps zoom to the nearest
+    // integer (9.5 -> 10, 4.5 -> 5), while MapKit renders the true fractional
+    // zoom, leaving the two maps up to half a level apart at fractional demo
+    // targets. Quantize programmatic targets the way Google does. Live zoom
+    // reported from gestures (measureGoogleZoom) stays fractional and faithful.
+    const zoom = snapZoomToGoogle(position.zoom);
+    const degreesPerPixel = 360 / (TILE_SIZE * Math.pow(2, zoom));
     const latitudeDelta = degreesPerPixel * cosLatitude(latitude) * height;
     const longitudeDelta = degreesPerPixel * width;
     if (!(latitudeDelta > 0) || !(longitudeDelta > 0)) return null;
@@ -553,6 +593,16 @@ const MAX_MERCATOR_LATITUDE = 85.05112878;
 function cosLatitude(latitude: number): number {
   const clamped = Math.max(-MAX_MERCATOR_LATITUDE, Math.min(MAX_MERCATOR_LATITUDE, latitude));
   return Math.max(MIN_COS_LAT, Math.cos((clamped * Math.PI) / 180));
+}
+
+/**
+ * Quantize a programmatic zoom target to the nearest integer, mirroring how
+ * Google Maps 2D (the project-wide camera reference) snaps zoom. Keeps MapKit
+ * aligned with Google at fractional demo zooms (Oahu 9.5 -> 10, Kiribati
+ * 4.5 -> 5) instead of rendering the true half level Google never shows.
+ */
+function snapZoomToGoogle(zoom: number): number {
+  return Math.round(zoom);
 }
 
 /** Shortest signed difference between two angles (degrees), in [-180, 180]. */

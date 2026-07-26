@@ -8,7 +8,7 @@ import {
   type PolygonOverlayRenderer,
 } from '@mapconductor/js-sdk-core';
 import { MapKitViewHolder } from '../MapKitViewHolder';
-import { toCoordinates, toMapKitStyleColor } from '../helpers';
+import { toUnwrappedCoordinates, toMapKitStyleColor } from '../helpers';
 import type { MapKitActualPolygon } from '../MapKitTypeAlias';
 
 // Match the ArcGIS/native geodesic densification cap so world-mask rings stay a
@@ -35,6 +35,11 @@ export class MapKitPolygonOverlayRenderer implements PolygonOverlayRenderer<MapK
     const overlay = new mapkit.PolygonOverlay(this.buildRings(state), {
       style: this.createStyle(state),
       data: { id: state.id },
+      // Keep the overlay non-interactive so MapKit doesn't swallow taps that land
+      // inside the polygon. Click detection is done entirely in JS via a
+      // point-in-polygon test from the map's single-tap coordinate (see
+      // MapKitViewController.handlePolygonClick).
+      enabled: false,
     });
     this.map.addOverlay(overlay);
     return overlay;
@@ -75,10 +80,12 @@ export class MapKitPolygonOverlayRenderer implements PolygonOverlayRenderer<MapK
     const densify = (points: GeoPoint[]): GeoPoint[] =>
       state.geodesic ? createInterpolatePoints(points, GEODESIC_MAX_SEGMENT_LENGTH_METERS) : points;
 
-    const outer = toCoordinates(densify(state.points));
+    // Unwrap each ring independently so a boundary crossing the antimeridian
+    // stays continuous instead of being drawn the long way around the map.
+    const outer = toUnwrappedCoordinates(densify(state.points));
     const holes = state.holes
       .filter(ring => ring.length >= 3)
-      .map(ring => toCoordinates(densify(ring)));
+      .map(ring => toUnwrappedCoordinates(densify(ring)));
     return [outer, ...holes];
   }
 
@@ -91,6 +98,11 @@ export class MapKitPolygonOverlayRenderer implements PolygonOverlayRenderer<MapK
       strokeColor: stroke.color,
       strokeOpacity: stroke.opacity,
       lineWidth: state.strokeWidth ?? 2,
+      // The overlay carries the outer boundary plus each hole ring (see
+      // buildRings). MapKit's default 'nonzero' fill rule only cuts a hole when
+      // its winding is opposite the outer ring's; the hole rings here can share
+      // the outer winding, so use 'evenodd' to punch holes regardless of winding.
+      fillRule: 'evenodd',
     });
   }
 }

@@ -8,7 +8,7 @@ import {
   type PolylineOverlayRenderer,
 } from '@mapconductor/js-sdk-core';
 import { MapKitViewHolder } from '../MapKitViewHolder';
-import { toCoordinates, toMapKitStyleColor } from '../helpers';
+import { toUnwrappedCoordinates, toMapKitStyleColor } from '../helpers';
 import type { MapKitActualPolyline } from '../MapKitTypeAlias';
 
 /**
@@ -28,6 +28,10 @@ export class MapKitPolylineOverlayRenderer implements PolylineOverlayRenderer<Ma
     const overlay = new mapkit.PolylineOverlay(this.buildPoints(state), {
       style: this.createStyle(state),
       data: { id: state.id },
+      // Keep the overlay non-interactive so MapKit doesn't swallow taps that land
+      // on the stroke. Polyline click detection is done entirely in JS from the
+      // map's single-tap coordinate (see MapKitViewController.handlePolylineClick).
+      enabled: false,
     });
     this.map.addOverlay(overlay);
     return overlay;
@@ -68,7 +72,7 @@ export class MapKitPolylineOverlayRenderer implements PolylineOverlayRenderer<Ma
     const points = state.geodesic
       ? createInterpolatePoints(state.points)
       : createLinearInterpolatePoints(state.points);
-    return toCoordinates(points);
+    return toUnwrappedCoordinates(points);
   }
 
   private createStyle(state: PolylineState): mapkit.Style {

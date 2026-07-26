@@ -64,6 +64,31 @@ export function toCoordinates(points: readonly GeoPointInterface[]): mapkit.Coor
   return points.map(toCoordinate);
 }
 
+function normalizeLongitude(longitude: number): number {
+  return ((((longitude + 180) % 360) + 360) % 360) - 180;
+}
+
+/**
+ * Convert points to MapKit coordinates while keeping longitudes continuous
+ * across the antimeridian. Geographic interpolation normalizes longitude to
+ * [-180, 180], but MapKit accepts unwrapped longitudes, so each vertex is
+ * shifted into the same world copy as its predecessor (…, +180, +190, … or …,
+ * -180, -190, …). Without this a segment crossing the date line is drawn the
+ * long way around the whole map. Mirrors the Leaflet/OpenLayers vector renderers.
+ */
+export function toUnwrappedCoordinates(points: readonly GeoPointInterface[]): mapkit.Coordinate[] {
+  let previousLongitude: number | null = null;
+  return points.map(point => {
+    let longitude = normalizeLongitude(point.longitude);
+    if (previousLongitude != null) {
+      while (longitude - previousLongitude > 180) longitude -= 360;
+      while (longitude - previousLongitude < -180) longitude += 360;
+    }
+    previousLongitude = longitude;
+    return new mapkit.Coordinate(point.latitude, longitude);
+  });
+}
+
 export function toGeoPoint(coordinate: mapkit.Coordinate): GeoPoint {
   return createGeoPoint({ latitude: coordinate.latitude, longitude: coordinate.longitude });
 }
