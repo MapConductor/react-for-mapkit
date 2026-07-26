@@ -1,3 +1,5 @@
+English | [日本語](https://github.com/MapConductor/react-for-mapkit/blob/main/README.ja.md) | [Español (Latinoamérica)](https://github.com/MapConductor/react-for-mapkit/blob/main/README.es-419.md)
+
 # @mapconductor/react-for-mapkit
 
 Apple MapKit JS provider for the MapConductor React SDK. Renders MapConductor
