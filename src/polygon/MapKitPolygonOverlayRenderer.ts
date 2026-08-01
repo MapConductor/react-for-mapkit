@@ -1,14 +1,13 @@
 import {
-  createInterpolatePoints,
+  buildUnwrappedPolygonRings,
   PolygonEntity,
-  type GeoPoint,
   type PolygonAddParams,
   type PolygonChangeParams,
   type PolygonState,
   type PolygonOverlayRenderer,
 } from '@mapconductor/js-sdk-core';
 import { MapKitViewHolder } from '../MapKitViewHolder';
-import { toUnwrappedCoordinates, toMapKitStyleColor } from '../helpers';
+import { toCoordinates, toMapKitStyleColor } from '../helpers';
 import type { MapKitActualPolygon } from '../MapKitTypeAlias';
 
 // Match the ArcGIS/native geodesic densification cap so world-mask rings stay a
@@ -77,16 +76,18 @@ export class MapKitPolygonOverlayRenderer implements PolygonOverlayRenderer<MapK
   async onPostProcess(): Promise<void> {}
 
   private buildRings(state: PolygonState): mapkit.Coordinate[][] {
-    const densify = (points: GeoPoint[]): GeoPoint[] =>
-      state.geodesic ? createInterpolatePoints(points, GEODESIC_MAX_SEGMENT_LENGTH_METERS) : points;
-
-    // Unwrap each ring independently so a boundary crossing the antimeridian
-    // stays continuous instead of being drawn the long way around the map.
-    const outer = toUnwrappedCoordinates(densify(state.points));
-    const holes = state.holes
-      .filter(ring => ring.length >= 3)
-      .map(ring => toUnwrappedCoordinates(densify(ring)));
-    return [outer, ...holes];
+    // Core pipeline: densify each ring (geodesic great-circle or straight-in-
+    // lat/lng linear interpolation, matching the Android renderers) and unwrap
+    // the longitudes into the outer ring's world copy, so a boundary crossing
+    // the antimeridian stays continuous instead of being drawn the long way
+    // around the map.
+    const { outerRings, holeRings } = buildUnwrappedPolygonRings(
+      state.points,
+      state.holes,
+      state.geodesic,
+      GEODESIC_MAX_SEGMENT_LENGTH_METERS,
+    );
+    return [...outerRings, ...holeRings].map(toCoordinates);
   }
 
   private createStyle(state: PolygonState): mapkit.Style {

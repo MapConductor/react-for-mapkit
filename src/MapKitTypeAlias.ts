@@ -5,6 +5,9 @@
 export type MapKitActualMap = mapkit.Map;
 export type MapKitActualMarker = mapkit.ImageAnnotation;
 export type MapKitActualPolyline = mapkit.PolylineOverlay;
-export type MapKitActualCircle = mapkit.CircleOverlay;
+// Circles are rendered as a core-geometry polygon ring (circleToRing), not
+// mapkit.CircleOverlay, so the circle shape definition (geodesic vs planar)
+// is unified across providers.
+export type MapKitActualCircle = mapkit.PolygonOverlay;
 export type MapKitActualPolygon = mapkit.PolygonOverlay;
 export type MapKitActualRasterLayer = mapkit.TileOverlay;

@@ -1,6 +1,5 @@
 import {
-  createInterpolatePoints,
-  createLinearInterpolatePoints,
+  buildUnwrappedPolylinePath,
   PolylineEntity,
   type PolylineAddParams,
   type PolylineChangeParams,
@@ -8,7 +7,7 @@ import {
   type PolylineOverlayRenderer,
 } from '@mapconductor/js-sdk-core';
 import { MapKitViewHolder } from '../MapKitViewHolder';
-import { toUnwrappedCoordinates, toMapKitStyleColor } from '../helpers';
+import { toCoordinates, toMapKitStyleColor } from '../helpers';
 import type { MapKitActualPolyline } from '../MapKitTypeAlias';
 
 /**
@@ -69,10 +68,9 @@ export class MapKitPolylineOverlayRenderer implements PolylineOverlayRenderer<Ma
   async onPostProcess(): Promise<void> {}
 
   private buildPoints(state: PolylineState): mapkit.Coordinate[] {
-    const points = state.geodesic
-      ? createInterpolatePoints(state.points)
-      : createLinearInterpolatePoints(state.points);
-    return toUnwrappedCoordinates(points);
+    // Core pipeline: densification + longitude unwrap (MapKit accepts unwrapped
+    // longitudes, keeping antimeridian-crossing segments continuous).
+    return toCoordinates(buildUnwrappedPolylinePath(state.points, state.geodesic));
   }
 
   private createStyle(state: PolylineState): mapkit.Style {

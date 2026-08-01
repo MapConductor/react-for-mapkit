@@ -1,4 +1,6 @@
 import {
+  circleToRing,
+  closeRing,
   CircleEntity,
   type CircleAddParams,
   type CircleChangeParams,
@@ -6,16 +8,20 @@ import {
   type CircleOverlayRenderer,
 } from '@mapconductor/js-sdk-core';
 import { MapKitViewHolder } from '../MapKitViewHolder';
-import { toCoordinate, toMapKitStyleColor } from '../helpers';
+import { toCoordinates, toMapKitStyleColor } from '../helpers';
 import type { MapKitActualCircle } from '../MapKitTypeAlias';
 
 /**
  * Web port of `MapKitCircleOverlayRenderer` (circle/MapKitCircleOverlayRenderer.swift).
  *
- * On iOS a circle is drawn as a 64-segment `MKPolygon`; MapKit JS exposes a
- * native `mapkit.CircleOverlay` that honours a meters radius directly, so this
- * uses that instead. The renderer contract (create/update/remove +
- * add/change/remove/postProcess) matches the other object-overlay providers.
+ * Like iOS (64-segment `MKPolygon`), the circle is drawn as a polygon ring from
+ * the shared core geometry (`circleToRing`) instead of MapKit JS's native
+ * `mapkit.CircleOverlay`, so the circle shape definition (geodesic vs planar)
+ * is unified across providers. The ring is unwrapped around the center
+ * longitude; MapKit accepts unwrapped longitudes (see toUnwrappedCoordinates),
+ * so an antimeridian-crossing circle stays continuous without splitting. The
+ * renderer contract (create/update/remove + add/change/remove/postProcess)
+ * matches the other object-overlay providers.
  */
 export class MapKitCircleOverlayRenderer implements CircleOverlayRenderer<MapKitActualCircle> {
   constructor(readonly holder: MapKitViewHolder) {}
@@ -26,10 +32,14 @@ export class MapKitCircleOverlayRenderer implements CircleOverlayRenderer<MapKit
 
   createCircle(entity: CircleEntity<MapKitActualCircle>): MapKitActualCircle | null {
     const state = entity.state;
-    const overlay = new mapkit.CircleOverlay(toCoordinate(state.center), state.radiusMeters, {
+    const overlay = new mapkit.PolygonOverlay(this.buildRing(state), {
       style: this.createStyle(state),
       data: { id: state.id },
-      enabled: state.clickable,
+      // Keep the overlay non-interactive so MapKit doesn't swallow taps that
+      // land inside the circle. Click detection is done entirely in JS via the
+      // shared geometric hit-test from the map's single-tap coordinate (see
+      // MapKitViewController.handleCircleClick).
+      enabled: false,
     });
     this.map.addOverlay(overlay);
     return overlay;
@@ -37,10 +47,8 @@ export class MapKitCircleOverlayRenderer implements CircleOverlayRenderer<MapKit
 
   updateCircle(overlay: MapKitActualCircle, entity: CircleEntity<MapKitActualCircle>): void {
     const state = entity.state;
-    overlay.coordinate = toCoordinate(state.center);
-    overlay.radius = state.radiusMeters;
+    overlay.points = this.buildRing(state);
     overlay.style = this.createStyle(state);
-    overlay.enabled = state.clickable;
   }
 
   removeCircle(overlay: MapKitActualCircle): void {
@@ -66,6 +74,12 @@ export class MapKitCircleOverlayRenderer implements CircleOverlayRenderer<MapKit
   }
 
   async onPostProcess(): Promise<void> {}
+
+  private buildRing(state: CircleState): mapkit.Coordinate[] {
+    return toCoordinates(
+      closeRing(circleToRing(state.center, state.radiusMeters, state.geodesic)),
+    );
+  }
 
   private createStyle(state: CircleState): mapkit.Style {
     const fill = toMapKitStyleColor(state.fillColor, 'transparent');
