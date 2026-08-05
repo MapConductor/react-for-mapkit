@@ -6,6 +6,7 @@ import {
   InfoBubbleOverlay,
   MarkerAnimationLayer,
   MapAttributionOverlay,
+  useMapUISettings,
   type InfoBubbleEntry,
 } from '@mapconductor/js-sdk-react';
 import {
@@ -16,6 +17,7 @@ import {
   type MarkerAnimationOverlayEntry,
   type MarkerTilingOptions,
   type OverlayCollector,
+  type MapViewControllerInterface,
 } from '@mapconductor/js-sdk-core';
 import type { MapKitViewStateInterface } from './MapKitViewState';
 import type { MapKitViewController } from './MapKitViewController';
@@ -60,7 +62,7 @@ export function MapKitMapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const [provider] = useState(() => new MapKitProvider());
   const [scope] = useState(() => new MapViewScope());
-  const [controller, setController] = useState<any>(null);
+  const [controller, setController] = useState<MapViewControllerInterface | null>(null);
   const [isReady, setIsReady] = useState(false);
   const bridgeUnsubs = useRef<(() => void)[]>([]);
   const typedControllerRef = useRef<MapKitViewController | null>(null);
@@ -207,6 +209,8 @@ export function MapKitMapView({
 
   // cameraTick forces a re-render on camera moves so bubbles re-project.
   void cameraTick;
+
+  useMapUISettings(state, controller);
 
   return (
     <MapContext.Provider value={{ controller, isReady }}>

@@ -1,5 +1,8 @@
 import {
   BaseMapViewController,
+  MapUISettingsDiagnostics,
+  type MapUISettings,
+  computeFitBoundsCameraPosition,
   createGeoPoint,
   createGeoRectBounds,
   createMapCameraPosition,
@@ -132,6 +135,21 @@ export class MapKitViewController
 
   getMap(): mapkit.Map {
     return this.map;
+  }
+
+  /**
+   * MapKit JS has no tilt gesture at all — its camera is always overhead — so
+   * only scroll, zoom and rotation can be gated.
+   */
+  applyUISettings(settings: MapUISettings): void {
+    this.map.isScrollEnabled = settings.scrollGesture;
+    this.map.isZoomEnabled = settings.zoomGesture;
+    this.map.isRotationEnabled = settings.rotateGesture;
+
+    MapUISettingsDiagnostics.warnIfRequested(
+      settings.tiltGesture, 'tilt', 'MapKit',
+      'MapKit JS renders a flat map and has no tilt gesture',
+    );
   }
 
   setMapDesignType(value: MapKitMapDesignTypeInterface): void {
@@ -284,27 +302,42 @@ export class MapKitViewController
   // --- Camera ---
 
   moveCamera(position: MapCameraPosition): Promise<boolean> {
-    this.logicalTiltHint = position.tilt;
-    this.lastCameraTarget = position;
-    const region = this.regionForCamera(position);
-    if (region) {
-      this.map.region = region;
-    } else {
-      // Before the map has laid out we can't derive the region from the viewport;
-      // approximate with the constant converter. The initial-altitude correction
-      // re-applies this exactly once the map has a size.
-      this.map.center = new mapkit.Coordinate(position.position.latitude, position.position.longitude);
-      this.map.cameraDistance = this.converter.zoomLevelToAltitude({ zoomLevel: snapZoomToGoogle(position.zoom), latitude: position.position.latitude, tilt: 0 });
-    }
-    this.setRotation(position.bearing);
-    return Promise.resolve(true);
+    return this.commitCamera(position, { animated: false });
   }
 
   animateCamera(position: MapCameraPosition, options?: CameraOptions): Promise<boolean> {
+    return this.commitCamera(position, { animated: true, duration: options?.duration });
+  }
+
+  /**
+   * Shared camera commit. `snapZoom` defaults to true so explicit camera targets
+   * quantize their zoom to match the Google Maps 2D reference; fitBounds passes
+   * false to keep its fractional fit zoom so `padding` is honored.
+   */
+  private commitCamera(
+    position: MapCameraPosition,
+    { animated, duration, snapZoom = true }: { animated: boolean; duration?: number; snapZoom?: boolean },
+  ): Promise<boolean> {
     this.logicalTiltHint = position.tilt;
     this.lastCameraTarget = position;
+    // Before the map has laid out we can't derive the region from the viewport;
+    // approximate with the constant converter. The initial-altitude correction
+    // re-applies this exactly once the map has a size.
+    const fallbackZoom = snapZoom ? snapZoomToGoogle(position.zoom) : position.zoom;
+    const region = this.regionForCamera(position, snapZoom);
+
+    if (!animated) {
+      if (region) {
+        this.map.region = region;
+      } else {
+        this.map.center = new mapkit.Coordinate(position.position.latitude, position.position.longitude);
+        this.map.cameraDistance = this.converter.zoomLevelToAltitude({ zoomLevel: fallbackZoom, latitude: position.position.latitude, tilt: 0 });
+      }
+      this.setRotation(position.bearing);
+      return Promise.resolve(true);
+    }
+
     this.initialAltitudeCorrected = true;
-    const region = this.regionForCamera(position);
     if (region) {
       // A single setRegionAnimated moves the center AND zoom together. Calling
       // separate setCenterAnimated/setCameraDistanceAnimated setters back-to-back
@@ -312,15 +345,14 @@ export class MapKitViewController
       this.map.setRegionAnimated(region, true);
     } else {
       this.map.setCenterAnimated(new mapkit.Coordinate(position.position.latitude, position.position.longitude), true);
-      this.map.setCameraDistanceAnimated(this.converter.zoomLevelToAltitude({ zoomLevel: snapZoomToGoogle(position.zoom), latitude: position.position.latitude, tilt: 0 }), true);
+      this.map.setCameraDistanceAnimated(this.converter.zoomLevelToAltitude({ zoomLevel: fallbackZoom, latitude: position.position.latitude, tilt: 0 }), true);
     }
     // Only touch rotation when it actually changes, so it doesn't cancel the
     // region animation above. Fly-to keeps bearing at 0, so this is usually a no-op.
     if (Math.abs(normalizeAngleDelta(position.bearing - this.map.rotation)) > 0.01) {
       this.map.setRotationAnimated(position.bearing, true);
     }
-    const duration = options?.duration ?? 500;
-    return new Promise((resolve) => setTimeout(() => resolve(true), duration));
+    return new Promise((resolve) => setTimeout(() => resolve(true), duration ?? 500));
   }
 
   private setRotation(bearing: number): void {
@@ -329,11 +361,24 @@ export class MapKitViewController
     }
   }
 
+  // Unified fit: the core computes center + zoom; moveCamera keeps the current
+  // rotation (MapKit's setRegionAnimated would reset heading to north-up).
   fitBounds(bounds: GeoRectBounds, options?: CameraOptions): Promise<boolean> {
     if (!bounds.southWest || !bounds.northEast) return Promise.resolve(false);
-    const region = regionFromBounds(bounds);
-    this.map.setRegionAnimated(region, (options?.duration ?? 0) > 0);
-    return Promise.resolve(true);
+    const current = this.getCameraPosition();
+    if (!current) return Promise.resolve(false);
+    const el = this.holder.mapView;
+    const fit = computeFitBoundsCameraPosition({
+      bounds,
+      viewportWidthPx: el.clientWidth,
+      viewportHeightPx: el.clientHeight,
+      padding: typeof options?.padding === 'number' ? options.padding : 0,
+      bearing: current.bearing,
+    });
+    if (!fit) return Promise.resolve(false);
+    const target = current.copy({ position: fit.center, zoom: fit.zoom });
+    // snapZoom:false — keep the fractional fit zoom so `padding` is honored.
+    return this.commitCamera(target, { animated: !!options?.duration, duration: options?.duration, snapZoom: false });
   }
 
   getCameraPosition(): MapCameraPosition | null {
@@ -400,7 +445,7 @@ export class MapKitViewController
    * This makes MapKit's zoom match Google's exactly and lets a single
    * setRegionAnimated move both center and zoom. Returns null before layout.
    */
-  private regionForCamera(position: MapCameraPosition): mapkit.CoordinateRegion | null {
+  private regionForCamera(position: MapCameraPosition, snapZoom = true): mapkit.CoordinateRegion | null {
     const el = this.holder.mapView;
     const width = el.clientWidth;
     const height = el.clientHeight;
@@ -412,7 +457,9 @@ export class MapKitViewController
     // zoom, leaving the two maps up to half a level apart at fractional demo
     // targets. Quantize programmatic targets the way Google does. Live zoom
     // reported from gestures (measureGoogleZoom) stays fractional and faithful.
-    const zoom = snapZoomToGoogle(position.zoom);
+    // fitBounds passes snapZoom:false so its computed fractional zoom is kept —
+    // rounding would break the fit and neutralize `padding`.
+    const zoom = snapZoom ? snapZoomToGoogle(position.zoom) : position.zoom;
     const degreesPerPixel = 360 / (TILE_SIZE * Math.pow(2, zoom));
     const latitudeDelta = degreesPerPixel * cosLatitude(latitude) * height;
     const longitudeDelta = degreesPerPixel * width;
@@ -622,15 +669,4 @@ function toMercatorMeters(latitude: number, longitude: number): { x: number; y: 
   };
 }
 
-function regionFromBounds(bounds: GeoRectBounds): mapkit.CoordinateRegion {
-  const sw = bounds.southWest!;
-  const ne = bounds.northEast!;
-  const centerLat = (sw.latitude + ne.latitude) / 2;
-  const centerLng = (sw.longitude + ne.longitude) / 2;
-  const latDelta = Math.max(Math.abs(ne.latitude - sw.latitude), 1e-3);
-  const lngDelta = Math.max(Math.abs(ne.longitude - sw.longitude), 1e-3);
-  return new mapkit.CoordinateRegion(
-    new mapkit.Coordinate(centerLat, centerLng),
-    new mapkit.CoordinateSpan(latDelta, lngDelta),
-  );
-}
+
