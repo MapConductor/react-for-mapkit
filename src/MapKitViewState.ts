@@ -114,7 +114,7 @@ export class MapKitViewState
   }
 }
 
-export function useMapKitViewState(params: MapKitViewStateParams = {}): MapKitViewState {
+export function useMapKitViewState(params: MapKitViewStateParams = {}): MapKitViewStateInterface {
   const [state] = useState(() => new MapKitViewState(params));
   return state;
 }

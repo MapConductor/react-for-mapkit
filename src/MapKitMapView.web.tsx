@@ -8,6 +8,7 @@ import {
   MarkerAnimationLayer,
   MapAttributionOverlay,
   type InfoBubbleEntry,
+  createMapContextValue,
 } from '@mapconductor/js-sdk-react';
 import {
   useCameraRestriction,
@@ -23,6 +24,7 @@ import {
   type MarkerTilingOptions,
   type OverlayCollector,
   type MapViewControllerInterface,
+  mapViewStateInternal,
 } from '@mapconductor/js-sdk-core';
 import type { MapKitViewStateInterface } from './MapKitViewState';
 import type { MapKitViewController } from './MapKitViewController';
@@ -126,24 +128,24 @@ export function MapKitMapView({
       .then((ctrl) => {
         if (cancelled) return;
 
-        state.setController(ctrl);
-        state.setCameraPositionChangeListener(() => {
+        mapViewStateInternal(state).setController(ctrl);
+        mapViewStateInternal(state).setCameraPositionChangeListener(() => {
           setCameraTick(t => t + 1);
         });
         setController(ctrl);
         typedControllerRef.current = ctrl as MapKitViewController;
 
         ctrl.setCameraMoveStartListener((camera: MapCameraPosition) => {
-          state.updateCameraPosition(camera);
+          mapViewStateInternal(state).updateCameraPosition(camera);
           onCameraMoveStartRef.current?.(camera);
         });
         ctrl.setCameraMoveListener((camera: MapCameraPosition) => {
-          state.updateCameraPosition(camera);
+          mapViewStateInternal(state).updateCameraPosition(camera);
           onCameraMoveRef.current?.(camera);
           setCameraTick(t => t + 1);
         });
         ctrl.setCameraMoveEndListener((camera: MapCameraPosition) => {
-          state.updateCameraPosition(camera);
+          mapViewStateInternal(state).updateCameraPosition(camera);
           onCameraMoveEndRef.current?.(camera);
           setCameraTick(t => t + 1);
         });
@@ -152,7 +154,7 @@ export function MapKitMapView({
         ctrl.setMapInitializedListener(() => {
           const initialCamera = typedControllerRef.current?.getCameraPosition() ?? null;
           // 地図が出来た時点の実カメラ（visibleRegion 込み）を state へ流し込む。
-          if (initialCamera) state.updateCameraPosition(initialCamera);
+          if (initialCamera) mapViewStateInternal(state).updateCameraPosition(initialCamera);
           setIsLoaded(true);
           onMapLoadedRef.current?.(state);
           setCameraTick(t => t + 1);
@@ -211,8 +213,8 @@ export function MapKitMapView({
 
     return () => {
       cancelled = true;
-      state.setCameraPositionChangeListener(null);
-      state.setController(null);
+      mapViewStateInternal(state).setCameraPositionChangeListener(null);
+      mapViewStateInternal(state).setController(null);
       typedControllerRef.current = null;
       bridgeUnsubs.current.forEach((unsub) => unsub());
       bridgeUnsubs.current = [];
@@ -235,7 +237,7 @@ export function MapKitMapView({
   useMarkerRenderingSupport(state, scope, controller);
 
   return (
-    <MapContext.Provider value={{ controller, isReady, isLoaded, state }}>
+    <MapContext.Provider value={createMapContextValue({ controller, isReady, isLoaded, state })}>
       <div
         style={{
           position: 'relative',
