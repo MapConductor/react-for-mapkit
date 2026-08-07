@@ -7,7 +7,6 @@ import {
   createGeoRectBounds,
   createMapCameraPosition,
   Earth,
-  type CameraOptions,
   type CircleCapable,
   type CircleEvent,
   type CircleState,
@@ -305,8 +304,8 @@ export class MapKitViewController
     return this.commitCamera(position, { animated: false });
   }
 
-  animateCamera(position: MapCameraPosition, options?: CameraOptions): Promise<boolean> {
-    return this.commitCamera(position, { animated: true, duration: options?.duration });
+  animateCamera(position: MapCameraPosition, durationMillis: number): Promise<boolean> {
+    return this.commitCamera(position, { animated: true, duration: durationMillis });
   }
 
   /**
@@ -363,7 +362,7 @@ export class MapKitViewController
 
   // Unified fit: the core computes center + zoom; moveCamera keeps the current
   // rotation (MapKit's setRegionAnimated would reset heading to north-up).
-  fitBounds(bounds: GeoRectBounds, options?: CameraOptions): Promise<boolean> {
+  fitBounds(bounds: GeoRectBounds, padding: number): Promise<boolean> {
     if (!bounds.southWest || !bounds.northEast) return Promise.resolve(false);
     const current = this.getCameraPosition();
     if (!current) return Promise.resolve(false);
@@ -372,13 +371,14 @@ export class MapKitViewController
       bounds,
       viewportWidthPx: el.clientWidth,
       viewportHeightPx: el.clientHeight,
-      padding: typeof options?.padding === 'number' ? options.padding : 0,
+      padding,
       bearing: current.bearing,
     });
     if (!fit) return Promise.resolve(false);
     const target = current.copy({ position: fit.center, zoom: fit.zoom });
+    // fitBounds は core のインタフェース上 duration を受け取らない（android-sdk 揃え）。
     // snapZoom:false — keep the fractional fit zoom so `padding` is honored.
-    return this.commitCamera(target, { animated: !!options?.duration, duration: options?.duration, snapZoom: false });
+    return this.commitCamera(target, { animated: false, snapZoom: false });
   }
 
   getCameraPosition(): MapCameraPosition | null {
@@ -471,9 +471,6 @@ export class MapKitViewController
     );
   }
 
-  getBounds(): GeoRectBounds | null {
-    return this.getVisibleRegion()?.bounds ?? null;
-  }
 
   private getVisibleRegion(): VisibleRegion | null {
     const el = this.holder.mapView;

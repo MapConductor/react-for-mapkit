@@ -1,5 +1,6 @@
 import {
   buildUnwrappedPolygonRings,
+  resolveHoles,
   PolygonEntity,
   type PolygonAddParams,
   type PolygonChangeParams,
@@ -76,15 +77,19 @@ export class MapKitPolygonOverlayRenderer implements PolygonOverlayRenderer<MapK
   async onPostProcess(): Promise<void> {}
 
   private buildRings(state: PolygonState): mapkit.Coordinate[][] {
+    // Overlapping holes are merged here, at geometry build time, the same place
+    // the Android renderers call resolveHoles(). The component-level union in
+    // Polygon.tsx does not re-run when state.holes is swapped at runtime.
+    const resolved = resolveHoles(state);
     // Core pipeline: densify each ring (geodesic great-circle or straight-in-
     // lat/lng linear interpolation, matching the Android renderers) and unwrap
     // the longitudes into the outer ring's world copy, so a boundary crossing
     // the antimeridian stays continuous instead of being drawn the long way
     // around the map.
     const { outerRings, holeRings } = buildUnwrappedPolygonRings(
-      state.points,
-      state.holes,
-      state.geodesic,
+      resolved.points,
+      resolved.holes,
+      resolved.geodesic,
       GEODESIC_MAX_SEGMENT_LENGTH_METERS,
     );
     return [...outerRings, ...holeRings].map(toCoordinates);
