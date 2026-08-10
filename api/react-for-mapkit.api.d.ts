@@ -1,4 +1,4 @@
-import { MapDesignTypeInterface, AttributionRule, MapConfig, MarkerTilingOptions, GeoRectBounds, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, WebMercatorZoomAltitudeConverter, AbstractMarkerOverlayRenderer, MarkerEntity, BitmapIcon, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleOverlayRenderer, CircleEntity, CircleAddParams, CircleChangeParams, CircleController, PolylineOverlayRenderer, PolylineEntity, PolylineAddParams, PolylineChangeParams, PolylineController, PolygonOverlayRenderer, PolygonEntity, PolygonAddParams, PolygonChangeParams, PolygonController, GroundImageState, GroundImageOverlayRenderer, GroundImageEntity, GroundImageAddParams, GroundImageChangeParams, GroundImageController, RasterLayerOverlayRenderer, RasterLayerEntity, RasterLayerAddParams, RasterLayerChangeParams, MapCameraPosition, RasterLayerController, RasterHeaderSupport, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, CircleState, OnCircleEventHandler, PolylineState, OnPolylineEventHandler, PolygonState, OnPolygonEventHandler, OnGroundImageEventHandler, MapViewStateInterface, MapViewState, MapViewHolder, MapViewBaseProps, VisibleRegion } from '@mapconductor/js-sdk-core';
+import { MapDesignTypeInterface, AttributionRule, MapConfig, MarkerTilingOptions, GeoRectBounds, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, WebMercatorZoomAltitudeConverter, AbstractMarkerOverlayRenderer, MarkerEntity, BitmapIcon, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleOverlayRenderer, CircleEntity, CircleAddParams, CircleChangeParams, CircleController, PolylineOverlayRenderer, PolylineEntity, PolylineAddParams, PolylineChangeParams, PolylineController, PolygonOverlayRenderer, PolygonEntity, PolygonAddParams, PolygonChangeParams, PolygonController, GroundImageState, GroundImageOverlayRenderer, GroundImageEntity, GroundImageAddParams, GroundImageChangeParams, GroundImageController, RasterLayerOverlayRenderer, RasterLayerEntity, RasterLayerAddParams, RasterLayerChangeParams, MapCameraPosition, RasterLayerController, RasterHeaderSupport, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, CircleState, OnCircleEventHandler, PolylineState, OnPolylineEventHandler, PolygonState, OnPolygonEventHandler, OnGroundImageEventHandler, MapViewStateInterface, MapViewState, MapViewBaseProps, VisibleRegion } from '@mapconductor/js-sdk-core';
 import React from 'react';
 
 /**
@@ -419,24 +419,11 @@ interface MapKitViewStateParams {
     cameraPosition?: MapCameraPosition;
 }
 declare class MapKitViewState extends MapViewState<MapKitMapDesignTypeInterface> implements MapKitViewStateInterface {
-    readonly id: string;
     readonly token: string;
-    private _cameraPosition;
     private _mapDesignType;
-    private controller;
-    private cameraPositionChangeListener;
     constructor({ id, token, mapDesignType, cameraPosition, }?: MapKitViewStateParams);
-    get cameraPosition(): MapCameraPosition;
     get mapDesignType(): MapKitMapDesignTypeInterface;
     set mapDesignType(value: MapKitMapDesignTypeInterface);
-    moveCameraTo(position: GeoPoint, durationMillis?: number): void;
-    moveCameraTo(cameraPosition: MapCameraPosition, durationMillis?: number): void;
-    getMapViewHolder(): MapViewHolder<unknown, unknown> | null;
-    fitBounds(bounds: GeoRectBounds, padding?: number): void;
-    setController(controller: MapViewControllerInterface | null): void;
-    updateCameraPosition(camera: MapCameraPosition): void;
-    setCameraPositionChangeListener(listener: ((camera: MapCameraPosition) => void) | null): void;
-    private resolveCameraPosition;
 }
 declare function useMapKitViewState(params?: MapKitViewStateParams): MapKitViewStateInterface;
 
