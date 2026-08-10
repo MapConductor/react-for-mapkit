@@ -1,4 +1,4 @@
-import { MapDesignTypeInterface, AttributionRule, MapConfig, MarkerTilingOptions, GeoRectBounds, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, AbstractZoomAltitudeConverter, AbstractMarkerOverlayRenderer, MarkerEntity, BitmapIcon, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleOverlayRenderer, CircleEntity, CircleAddParams, CircleChangeParams, CircleController, PolylineOverlayRenderer, PolylineEntity, PolylineAddParams, PolylineChangeParams, PolylineController, PolygonOverlayRenderer, PolygonEntity, PolygonAddParams, PolygonChangeParams, PolygonController, GroundImageState, GroundImageOverlayRenderer, GroundImageEntity, GroundImageAddParams, GroundImageChangeParams, GroundImageController, RasterLayerOverlayRenderer, RasterLayerEntity, RasterLayerAddParams, RasterLayerChangeParams, MapCameraPosition, RasterLayerController, RasterHeaderSupport, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, CircleState, OnCircleEventHandler, PolylineState, OnPolylineEventHandler, PolygonState, OnPolygonEventHandler, OnGroundImageEventHandler, MapViewStateInterface, MapViewState, MapViewHolder, MapViewBaseProps, VisibleRegion } from '@mapconductor/js-sdk-core';
+import { MapDesignTypeInterface, AttributionRule, MapConfig, MarkerTilingOptions, GeoRectBounds, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, WebMercatorZoomAltitudeConverter, AbstractMarkerOverlayRenderer, MarkerEntity, BitmapIcon, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleOverlayRenderer, CircleEntity, CircleAddParams, CircleChangeParams, CircleController, PolylineOverlayRenderer, PolylineEntity, PolylineAddParams, PolylineChangeParams, PolylineController, PolygonOverlayRenderer, PolygonEntity, PolygonAddParams, PolygonChangeParams, PolygonController, GroundImageState, GroundImageOverlayRenderer, GroundImageEntity, GroundImageAddParams, GroundImageChangeParams, GroundImageController, RasterLayerOverlayRenderer, RasterLayerEntity, RasterLayerAddParams, RasterLayerChangeParams, MapCameraPosition, RasterLayerController, RasterHeaderSupport, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, CircleState, OnCircleEventHandler, PolylineState, OnPolylineEventHandler, PolygonState, OnPolygonEventHandler, OnGroundImageEventHandler, MapViewStateInterface, MapViewState, MapViewHolder, MapViewBaseProps, VisibleRegion } from '@mapconductor/js-sdk-core';
 import React from 'react';
 
 /**
@@ -76,29 +76,16 @@ declare class MapKitViewHolder extends MapViewHolderBase<HTMLElement, mapkit.Map
 }
 
 /**
- * Web port of `MapKitZoomAltitudeConverter` (ZoomAltitudeConverter.swift).
+ * 統一ズーム（Google Maps 基準・256px タイル）⇄ 高度の変換。
  *
- * MapKit JS exposes the camera as a `cameraDistance` in meters (the altitude of
- * the camera above the map center). This converter maps a Google-like
- * Web-Mercator zoom level to that camera distance and back, exactly like the
- * native converter does for `MKMapCamera.fromDistance`.
+ * MapKit JS はカメラを `cameraDistance`（地図中心の上空にあるカメラの高さ、メートル）で
+ * 表す。ネイティブの `MKMapCamera.fromDistance` と同じ関係でズームと結び付ける。
+ * オフセットは 0。換算式はコアの {@link WebMercatorZoomAltitudeConverter} にある。
  */
-declare class MapKitZoomAltitudeConverter extends AbstractZoomAltitudeConverter {
+declare class MapKitZoomAltitudeConverter extends WebMercatorZoomAltitudeConverter {
     /** Matches the native `MapKitZoomAltitudeConverter` default. */
     static readonly MAPKIT_OPTIMIZED_ZOOM0_ALTITUDE = 171319879;
     constructor(zoom0Altitude?: number);
-    private cosLatitudeFactor;
-    private cosTiltFactor;
-    zoomLevelToAltitude({ zoomLevel, latitude, tilt, }: {
-        zoomLevel: number;
-        latitude: number;
-        tilt: number;
-    }): number;
-    altitudeToZoomLevel({ altitude, latitude, tilt, }: {
-        altitude: number;
-        latitude: number;
-        tilt: number;
-    }): number;
 }
 
 type MapKitActualMap = mapkit.Map;
