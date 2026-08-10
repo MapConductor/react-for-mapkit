@@ -30,27 +30,23 @@ export interface TapDeps {
   readonly groundImageController: MapKitGroundImageController;
   getCameraPosition(): MapCameraPosition | null;
   onMapClick(point: GeoPoint): void;
+
+  /**
+   * タップの配送。コアの `BaseMapViewController.dispatchTap` を呼ぶ。
+   * marker → circle → groundImage → polyline → polygon → map を 1 つだけ配送する。
+   */
+  dispatchTap(point: GeoPoint): boolean;
 }
 
 export function handleSingleTap(deps: TapDeps, event: mapkit.EventBase<mapkit.Map>): void {
   const point = pointFromEvent(deps, event);
   if (!point) return;
 
-  if (handleCircleClick(deps, point)) return;
-  if (handlePolygonClick(deps, point)) return;
-  if (handlePolylineClick(deps, point)) return;
-  if (handleGroundImageClick(deps, point)) return;
-
-  // Tiled markers are drawn into a raster overlay (no annotation to receive a
-  // select event), so hit-test them here — mirrors the Leaflet/Azure controllers.
-  const camera = deps.getCameraPosition();
-  const tiled = deps.markerController.findTiled(point, camera?.zoom ?? 0);
-  if (tiled?.state.clickable) {
-    deps.markerController.dispatchClick(tiled.state);
-    return;
-  }
-
-  deps.onMapClick(point);
+  // marker → circle → groundImage → polyline → polygon → map の一本道。
+  // 順序と先勝ちはコアの BaseMapViewController.dispatchTap が持つ。
+  // 移行前はここで circle → polygon → polyline → groundImage → marker の独自順だった
+  // （**マーカーが最後**で、他プロバイダと逆になっていた）。
+  deps.dispatchTap(point);
 }
 
 export function pointFromEvent(deps: TapDeps, event: mapkit.EventBase<mapkit.Map>): GeoPoint | null {

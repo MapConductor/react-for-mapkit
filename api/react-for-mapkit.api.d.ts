@@ -383,6 +383,13 @@ declare class MapKitViewController extends BaseMapViewController implements MapV
     updateGroundImage(state: GroundImageState): Promise<void>;
     clearOverlays(): Promise<void>;
     destroy(): void;
+    /**
+     * マーカーのヒットテストと配送。カスケードの先頭。
+     *
+     * タイル方式のマーカーはラスターオーバーレイに描かれ、select イベントを受ける
+     * annotation を持たないのでここでヒットテストする。
+     */
+    protected dispatchMarkerTap(point: GeoPoint): boolean;
 }
 
 /**

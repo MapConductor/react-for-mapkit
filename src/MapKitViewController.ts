@@ -16,6 +16,7 @@ import {
   type PolygonCapable,
   type PolylineCapable,
   type RasterLayerCapable,
+  type GeoPoint,
 } from '@mapconductor/js-sdk-core';
 import { MapKitViewHolder } from './MapKitViewHolder';
 import { MapKitZoomAltitudeConverter } from './zoom/ZoomAltitudeConverter';
@@ -63,6 +64,7 @@ export class MapKitViewController
       groundImageController: this.groundImageController,
       getCameraPosition: () => this.getCameraPosition(),
       onMapClick: (point) => this.notifyMapClick(point),
+      dispatchTap: (point) => this.dispatchTap(point),
     };
   }
   private readonly eventCleanup: (() => void)[] = [];
@@ -330,5 +332,18 @@ export class MapKitViewController
       this.groundImageController.renderer.destroy();
       this.map.destroy();
     });
+  }
+
+  /**
+   * マーカーのヒットテストと配送。カスケードの先頭。
+   *
+   * タイル方式のマーカーはラスターオーバーレイに描かれ、select イベントを受ける
+   * annotation を持たないのでここでヒットテストする。
+   */
+  protected override dispatchMarkerTap(point: GeoPoint): boolean {
+    const tiled = this.markerController.findTiled(point, this.getCameraPosition()?.zoom ?? 0);
+    if (!tiled?.state.clickable) return false;
+    this.markerController.dispatchClick(tiled.state);
+    return true;
   }
 }
