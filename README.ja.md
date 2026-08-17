@@ -45,7 +45,7 @@ npm install @mapconductor/react-for-mapkit
 
 - `@mapconductor/react-for-mapkit` — Apple MapKit 用のコンポーネント/フック
 - `@mapconductor/js-sdk-react` / `@mapconductor/js-sdk-core` は依存関係として自動的にインストールされます。
-- MapKit JS のトークン(環境変数 `VITE_MAPKIT_TOKEN`)が必要です。MapKit JS はこのトークンでリクエストを認可します。
+- MapKit JS のトークン(環境変数 `MAPKIT_TOKEN`)が必要です。MapKit JS はこのトークンでリクエストを認可します。
 
 ### ステップ 3: 地図を表示する
 
@@ -59,12 +59,16 @@ import {
 } from '@mapconductor/react-for-mapkit';
 import { createGeoPoint, createMapCameraPosition } from '@mapconductor/js-sdk-core';
 
+// 自分のキー。実値はソース管理に入れず、使っているビルドツールのやり方で
+// 環境から読み込んでください。
+const MAPKIT_TOKEN = '…';
+
 const TOKYO = createGeoPoint({ latitude: 35.6812, longitude: 139.7671 });
 const INITIAL_CAMERA = createMapCameraPosition({ position: TOKYO, zoom: 14 });
 
 export default function App() {
   const mapViewState = useMapKitViewState({
-    token: import.meta.env.VITE_MAPKIT_TOKEN,
+    token: MAPKIT_TOKEN,
     mapDesignType: MapKitMapDesign.Standard,
     cameraPosition: INITIAL_CAMERA,
   });
@@ -114,12 +118,16 @@ import {
 } from '@mapconductor/js-sdk-core';
 import { InfoBubble, Marker } from '@mapconductor/js-sdk-react';
 
+// 自分のキー。実値はソース管理に入れず、使っているビルドツールのやり方で
+// 環境から読み込んでください。
+const MAPKIT_TOKEN = '…';
+
 const TOKYO = createGeoPoint({ latitude: 35.6812, longitude: 139.7671 });
 const INITIAL_CAMERA = createMapCameraPosition({ position: TOKYO, zoom: 14 });
 
 export default function App() {
   const mapViewState = useMapKitViewState({
-    token: import.meta.env.VITE_MAPKIT_TOKEN,
+    token: MAPKIT_TOKEN,
     mapDesignType: MapKitMapDesign.Standard,
     cameraPosition: INITIAL_CAMERA,
   });
