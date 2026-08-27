@@ -1,6 +1,6 @@
 {
   "name": "@mapconductor/react-for-mapkit",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Apple MapKit provider for MapConductor React SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@mapconductor/js-sdk-core": "^0.2.0",
-    "@mapconductor/js-sdk-react": "^0.2.0"
+    "@mapconductor/js-sdk-react": "^0.2.1"
   },
   "devDependencies": {
     "@types/apple-mapkit-js-browser": "^5.78.1",
