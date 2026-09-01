@@ -2,8 +2,7 @@ import {
   createGeoPoint,
   createMapCameraPosition,
   type MapCameraPosition,
-  type VisibleRegion,
-} from '@mapconductor/js-sdk-core';
+  type VisibleRegion, toNativeRotation, bearingFromNativeRotation, } from '@mapconductor/js-sdk-core';
 import { MapKitZoomAltitudeConverter } from './zoom/ZoomAltitudeConverter';
 
 /**
@@ -34,7 +33,7 @@ export function toMapKitCameraParams(
   return {
     center: new mapkit.Coordinate(pos.position.latitude, pos.position.longitude),
     cameraDistance,
-    rotation: pos.bearing,
+    rotation: toNativeRotation(pos.bearing),
   };
 }
 
@@ -62,7 +61,7 @@ export function toMapCameraPosition({
   return createMapCameraPosition({
     position: createGeoPoint({ latitude: center.latitude, longitude: center.longitude }),
     zoom,
-    bearing: rotation,
+    bearing: bearingFromNativeRotation(rotation),
     tilt: logicalTiltHint ?? 0,
     visibleRegion: visibleRegion ?? undefined,
   });
