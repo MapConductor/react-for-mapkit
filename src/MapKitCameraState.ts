@@ -4,8 +4,7 @@ import {
   createMapCameraPosition,
   Earth,
   type MapCameraPosition,
-  type VisibleRegion,
-} from '@mapconductor/js-sdk-core';
+  type VisibleRegion, toNativeRotation, bearingFromNativeRotation, } from '@mapconductor/js-sdk-core';
 import type { MapKitViewHolder } from './MapKitViewHolder';
 import type { MapKitZoomAltitudeConverter } from './zoom/ZoomAltitudeConverter';
 
@@ -67,7 +66,7 @@ export class MapKitCameraState {
         this.deps.map.center = new mapkit.Coordinate(position.position.latitude, position.position.longitude);
         this.deps.map.cameraDistance = this.deps.converter.zoomLevelToAltitude({ zoomLevel: fallbackZoom, latitude: position.position.latitude, tilt: 0 });
       }
-      this.setRotation(position.bearing);
+      this.setRotation(toNativeRotation(position.bearing));
       return Promise.resolve(true);
     }
 
@@ -83,15 +82,29 @@ export class MapKitCameraState {
     }
     // Only touch rotation when it actually changes, so it doesn't cancel the
     // region animation above. Fly-to keeps bearing at 0, so this is usually a no-op.
-    if (Math.abs(normalizeAngleDelta(position.bearing - this.deps.map.rotation)) > 0.01) {
-      this.deps.map.setRotationAnimated(position.bearing, true);
+    const targetRotation = toNativeRotation(position.bearing);
+    if (Math.abs(normalizeAngleDelta(targetRotation - this.deps.map.rotation)) > 0.01) {
+      this.deps.map.setRotationAnimated(targetRotation, true);
     }
     return new Promise((resolve) => setTimeout(() => resolve(true), duration ?? 500));
   }
 
-  private setRotation(bearing: number): void {
-    if (Math.abs(normalizeAngleDelta(bearing - this.deps.map.rotation)) > 0.01) {
-      this.deps.map.rotation = bearing;
+  /**
+   * MapKit JS の `map.rotation` は **rotation 系**（値を増やすと地図が時計回りに回る）で、
+   * MapConductor の bearing と**同じ向き**である。したがって変換は恒等になる。
+   *
+   * これは実測で決めた。Apple は向きを文書化しておらず（"The map's rotation, in
+   * degrees." のみ）、ArcGIS のように**同じ SDK 系列でも web とネイティブで逆**の例が
+   * あるため、`MKMapCamera.heading`（heading 系）から推測してはいけない。
+   *
+   * 実測（2026-09-01, MapKit JS 5.x）: `map.rotation = 90` を当て、中心の真北の点を
+   * `convertCoordinateToPointOnPage` で投影すると **dx=+384 / dy=0**、つまり真北が
+   * 画面の**右**へ来た。地図が右へ 90 度回ったということで rotation 系。
+   * 逆に heading 系なら真北は左へ来る。
+   */
+  private setRotation(rotation: number): void {
+    if (Math.abs(normalizeAngleDelta(rotation - this.deps.map.rotation)) > 0.01) {
+      this.deps.map.rotation = rotation;
     }
   }
 
@@ -111,7 +124,7 @@ export class MapKitCameraState {
     return createMapCameraPosition({
       position: createGeoPoint({ latitude: center.latitude, longitude: center.longitude }),
       zoom,
-      bearing: this.deps.map.rotation,
+      bearing: bearingFromNativeRotation(this.deps.map.rotation),
       tilt: this.logicalTiltHint ?? 0,
       visibleRegion: this.readVisibleRegion() ?? undefined,
     });

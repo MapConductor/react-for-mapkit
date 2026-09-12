@@ -3,8 +3,7 @@ import {
   MarkerTilingOptions,
   type GeoRectBounds,
   type MapConfig,
-  type MapViewControllerInterface,
-} from '@mapconductor/js-sdk-core';
+  type MapViewControllerInterface, toNativeRotation, } from '@mapconductor/js-sdk-core';
 import { loadMapKit } from './LibraryLoader';
 import { MapKitViewController } from './MapKitViewController';
 import { MapKitViewHolder } from './MapKitViewHolder';
@@ -82,7 +81,7 @@ export class MapKitProvider extends MapProvider {
       mapType: MapKitMapDesign.toMapType(design),
       isRotationEnabled: true,
       center: new mapkit.Coordinate(latitude, initialCamera.position.longitude),
-      rotation: initialCamera.bearing,
+      rotation: toNativeRotation(initialCamera.bearing),
     });
     this.map = map;
 
