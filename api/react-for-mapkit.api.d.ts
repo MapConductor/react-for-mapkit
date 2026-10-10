@@ -428,7 +428,7 @@ interface MapKitMapViewProps extends MapViewBaseProps<MapKitViewStateInterface> 
 /**
  * Apple MapKit React component. Web port of `MapKitMapView` (MapKitMapView.swift).
  */
-declare function MapKitMapView({ state, className, style, containerStyle, markerTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: MapKitMapViewProps): React.JSX.Element;
+declare function MapKitMapView({ state, mapStyle, onStyleDiagnostics, className, style, containerStyle, markerTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: MapKitMapViewProps): React.JSX.Element;
 
 interface MapKitLoadOptions {
     /** A static MapKit JS authorization token (JWT). */
