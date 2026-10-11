@@ -26,6 +26,7 @@ import {
   type OverlayCollector,
   type MapViewControllerInterface,
   mapViewStateInternal,
+  RasterTilePreferenceKey,
 } from '@mapconductor/js-sdk-core';
 import type { MapKitViewStateInterface } from './MapKitViewState';
 import type { MapKitViewController } from './MapKitViewController';
@@ -243,6 +244,17 @@ export function MapKitMapView({
   // （android-sdk の *MapView.kt / ios-sdk の *MapView.swift が
   //  MarkerRenderingSupportKey を put するのと同じ位置づけ）。
   useMarkerRenderingSupport(state, scope, controller);
+
+  // MapKit JS lays TileOverlay images out on a 256 CSS-pixel grid. Letting
+  // vector tiles use the shared 512-pixel default makes MapKit request the
+  // next zoom level, so labels and roads appear half-sized compared with
+  // MapLibre at the same unified camera zoom.
+  useEffect(() => {
+    state.serviceRegistry.put(RasterTilePreferenceKey, { preferredTileSize: 256 });
+    return () => {
+      state.serviceRegistry.remove(RasterTilePreferenceKey);
+    };
+  }, [state]);
 
   return (
     <MapContext.Provider value={createMapContextValue({ controller, isReady, isLoaded, state })}>
