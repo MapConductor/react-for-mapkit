@@ -11,6 +11,7 @@ import {
   createMapContextValue,
 } from '@mapconductor/js-sdk-react';
 import {
+  useMapViewStyle,
   useCameraRestriction,
   useMapUISettings,
   useMarkerRenderingSupport,
@@ -25,6 +26,7 @@ import {
   type OverlayCollector,
   type MapViewControllerInterface,
   mapViewStateInternal,
+  RasterTilePreferenceKey,
   markerIconExtentPx,
 } from '@mapconductor/js-sdk-core';
 import type { MapKitViewStateInterface } from './MapKitViewState';
@@ -51,6 +53,8 @@ export interface MapKitMapViewProps extends MapViewBaseProps<MapKitViewStateInte
  */
 export function MapKitMapView({
   state,
+  mapStyle,
+  onStyleDiagnostics,
   className,
   style,
   containerStyle,
@@ -72,6 +76,11 @@ export function MapKitMapView({
   const [provider] = useState(() => new MapKitProvider());
   const [scope] = useState(() => new MapViewScope());
   const [controller, setController] = useState<MapViewControllerInterface | null>(null);
+
+  // 地図の見た目。何が起きるかはこのバックエンドが宣言した能力で決まるので、
+  // ここにプロバイダ固有の分岐は無い。android-sdk の `MapViewStyleEffect`、
+  // ios-sdk の `MapViewStyleHost` と同じ役目。
+  useMapViewStyle(state, controller, mapStyle, onStyleDiagnostics);
   const [isReady, setIsReady] = useState(false);
   // `onMapLoaded` と同じ瞬間を「値」として持つ。イベントを取り逃した後から
   // マウントした子（examples の Three.js overlay 等）も読めるようにするため。
@@ -236,6 +245,17 @@ export function MapKitMapView({
   // （android-sdk の *MapView.kt / ios-sdk の *MapView.swift が
   //  MarkerRenderingSupportKey を put するのと同じ位置づけ）。
   useMarkerRenderingSupport(state, scope, controller);
+
+  // MapKit JS lays TileOverlay images out on a 256 CSS-pixel grid. Letting
+  // vector tiles use the shared 512-pixel default makes MapKit request the
+  // next zoom level, so labels and roads appear half-sized compared with
+  // MapLibre at the same unified camera zoom.
+  useEffect(() => {
+    state.serviceRegistry.put(RasterTilePreferenceKey, { preferredTileSize: 256 });
+    return () => {
+      state.serviceRegistry.remove(RasterTilePreferenceKey);
+    };
+  }, [state]);
 
   return (
     <MapContext.Provider value={createMapContextValue({ controller, isReady, isLoaded, state })}>
