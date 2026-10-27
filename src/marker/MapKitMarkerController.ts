@@ -4,10 +4,13 @@ import {
   createRasterLayerState,
   LocalTileServer,
   MARKER_HIT_RADIUS_MOUSE_PX,
+  MARKER_HIT_RADIUS_TOUCH_PX,
   MarkerManager,
   MarkerTileRenderer,
   MarkerTilingOptions,
   RasterLayerSource,
+  markerHitShape,
+  pickMarkerHit,
   type GeoPoint,
   type MarkerEntity,
   type MarkerState,
@@ -15,6 +18,10 @@ import {
 } from '@mapconductor/js-sdk-core';
 import { MapKitMarkerRenderer } from './MapKitMarkerRenderer';
 import type { MapKitActualMarker } from '../MapKitTypeAlias';
+import type { MapConductorPointAnnotationData } from './MapConductorPointAnnotation';
+
+/** How long after a press a `select` still counts as that press's. */
+const SELECT_AFTER_PRESS_MS = 1000;
 
 /**
  * Web port of `MapKitMarkerController` (marker/MapKitMarkerController.swift).
@@ -34,6 +41,28 @@ export class MapKitMarkerController extends AbstractMarkerController<MapKitActua
   /** Wired by MapKitViewController to drive the tiled-marker raster overlay. */
   onRasterLayerUpdate: ((state: RasterLayerState | null) => Promise<void>) | null = null;
 
+  /**
+   * Wired by MapKitViewController: a press MapKit took as selecting an
+   * annotation, but that fell beside the pin as drawn, goes back to the map's
+   * tap dispatch at this page point instead.
+   */
+  onSelectMissed: ((pointOnPage: DOMPoint) => void) | null = null;
+
+  /**
+   * The last press on the map, in page coordinates. MapKit selects an
+   * ImageAnnotation anywhere on its image, and a default pin is drawn about
+   * 31 px wide in a 48 px square, so `select` is checked against the drawn pin
+   * (`markerHitShape`) at this point before it counts as a click. `select`
+   * itself carries no position.
+   */
+  private lastPress: { x: number; y: number; touch: boolean; at: number } | null = null;
+  private get mapElement(): HTMLElement {
+    return this.renderer.holder.map.element as HTMLElement;
+  }
+  private readonly onPress = (event: PointerEvent) => {
+    this.lastPress = { x: event.pageX, y: event.pageY, touch: event.pointerType === 'touch', at: performance.now() };
+  };
+
   constructor(
     renderer: MapKitMarkerRenderer,
     private readonly tilingOptions: MarkerTilingOptions = MarkerTilingOptions.Default,
@@ -42,11 +71,26 @@ export class MapKitMarkerController extends AbstractMarkerController<MapKitActua
       markerManager: MarkerManager.defaultManager<MapKitActualMarker>(null, tilingOptions.minMarkerCount),
       renderer,
     });
+    // Capture: MapKit stops presses on annotations from reaching the map.
+    this.mapElement.addEventListener('pointerdown', this.onPress, true);
   }
 
   override async update(state: MarkerState): Promise<void> {
     if (this.isDragging(state)) return;
     await super.update(state);
+  }
+
+  /** Whether a press landed on the pin as drawn (a finger gets MARKER_HIT_RADIUS_TOUCH_PX of slop). */
+  private pressHitsPin(annotation: MapKitActualMarker, press: { x: number; y: number; touch: boolean }): boolean {
+    const bitmap = (annotation.data as MapConductorPointAnnotationData).initialBitmapIcon;
+    const anchor = this.renderer.holder.map.convertCoordinateToPointOnPage(annotation.coordinate);
+    const tolerance = press.touch ? MARKER_HIT_RADIUS_TOUCH_PX : MARKER_HIT_RADIUS_MOUSE_PX;
+    return pickMarkerHit(
+      press,
+      [annotation],
+      () => ({ anchorScreen: { x: anchor.x, y: anchor.y }, ...markerHitShape(bitmap) }),
+      tolerance,
+    ) !== null;
   }
 
   /** Nearest tiled (raster) marker to a clicked point, or null. */
@@ -75,6 +119,7 @@ export class MapKitMarkerController extends AbstractMarkerController<MapKitActua
   }
 
   override destroy(): void {
+    this.mapElement.removeEventListener('pointerdown', this.onPress, true);
     void this.removeTileOverlay();
     super.destroy();
   }
@@ -87,6 +132,12 @@ export class MapKitMarkerController extends AbstractMarkerController<MapKitActua
     annotation.addEventListener('select', () => {
       // Suppress MapKit's built-in selection/callout; we only use it as a tap signal.
       annotation.selected = false;
+      const press = this.lastPress;
+      // No recent press: selected some other way (keyboard), so it counts.
+      if (press && performance.now() - press.at <= SELECT_AFTER_PRESS_MS && !this.pressHitsPin(annotation, press)) {
+        this.onSelectMissed?.(new DOMPoint(press.x, press.y));
+        return;
+      }
       if (state.clickable) this.dispatchClick(state);
     });
 

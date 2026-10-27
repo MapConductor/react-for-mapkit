@@ -177,12 +177,17 @@ export class MapKitViewController
     this.map.addEventListener('region-change-start', onRegionChangeStart);
     this.map.addEventListener('region-change-end', onRegionChangeEnd);
     this.map.addEventListener('single-tap', onSingleTap);
+    // A press beside a pin that MapKit still took as selecting its annotation
+    // is a tap on the map (see MapKitMarkerController.onSelectMissed).
+    this.markerController.onSelectMissed = (pointOnPage) =>
+      handleSingleTap(this.tapDeps, { pointOnPage } as unknown as mapkit.EventBase<mapkit.Map>);
     this.map.addEventListener('long-press', onLongPress);
 
     this.eventCleanup.push(() => {
       this.map.removeEventListener('region-change-start', onRegionChangeStart);
       this.map.removeEventListener('region-change-end', onRegionChangeEnd);
       this.map.removeEventListener('single-tap', onSingleTap);
+      this.markerController.onSelectMissed = null;
       this.map.removeEventListener('long-press', onLongPress);
     });
   }
