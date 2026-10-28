@@ -129,8 +129,26 @@ declare class MapKitMarkerController extends AbstractMarkerController<MapKitActu
     private tileGeneration;
     /** Wired by MapKitViewController to drive the tiled-marker raster overlay. */
     onRasterLayerUpdate: ((state: RasterLayerState | null) => Promise<void>) | null;
+    /**
+     * Wired by MapKitViewController: a press MapKit took as selecting an
+     * annotation, but that fell beside the pin as drawn, goes back to the map's
+     * tap dispatch at this page point instead.
+     */
+    onSelectMissed: ((pointOnPage: DOMPoint) => void) | null;
+    /**
+     * The last press on the map, in page coordinates. MapKit selects an
+     * ImageAnnotation anywhere on its image, and a default pin is drawn about
+     * 31 px wide in a 48 px square, so `select` is checked against the drawn pin
+     * (`markerHitShape`) at this point before it counts as a click. `select`
+     * itself carries no position.
+     */
+    private lastPress;
+    private get mapElement();
+    private readonly onPress;
     constructor(renderer: MapKitMarkerRenderer, tilingOptions?: MarkerTilingOptions);
     update(state: MarkerState): Promise<void>;
+    /** Whether a press landed on the pin as drawn (a finger gets MARKER_HIT_RADIUS_TOUCH_PX of slop). */
+    private pressHitsPin;
     /** Nearest tiled (raster) marker to a clicked point, or null. */
     findTiled(position: GeoPoint, zoom: number): MarkerEntity<MapKitActualMarker> | null;
     protected shouldTile(state: MarkerState, totalCount: number): boolean;
