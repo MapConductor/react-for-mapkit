@@ -10,6 +10,7 @@ import {
   MarkerTilingOptions,
   RasterLayerSource,
   markerHitShape,
+  tilePixelRatio,
   pickMarkerHit,
   type GeoPoint,
   type MarkerEntity,
@@ -173,7 +174,18 @@ export class MapKitMarkerController extends AbstractMarkerController<MapKitActua
 
     this.tileRouteId ??= `mc-mapkit-tile-${generateId()}`;
     const server = LocalTileServer.startServer();
-    const renderer = new MarkerTileRenderer<MarkerState>(tiledStates, 256, this.tilingOptions.iconScaleCallback ?? undefined);
+    // MapKit JS draws every TileOverlay image into a 256 CSS-pixel tile node,
+    // whatever the image's own size, so a 2x image is just sharper.
+    const pixelRatio = tilePixelRatio();
+    const renderer = new MarkerTileRenderer<MarkerState>(
+      tiledStates,
+      256,
+      this.tilingOptions.iconScaleCallback ?? undefined,
+      1.0,
+      false,
+      this.tilingOptions.declutterPx,
+      pixelRatio,
+    );
     this.tileRenderer = renderer;
     this.tileVersion++;
     server.register(this.tileRouteId, renderer);
@@ -187,6 +199,7 @@ export class MapKitMarkerController extends AbstractMarkerController<MapKitActua
       routeId: this.tileRouteId,
       tileSize: 256,
       cacheKey: String(this.tileVersion),
+      pixelRatio,
     });
 
     // A newer sync (or clear()/destroy()) ran while we awaited the service worker;
