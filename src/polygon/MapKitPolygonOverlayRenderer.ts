@@ -103,7 +103,7 @@ export class MapKitPolygonOverlayRenderer implements PolygonOverlayRenderer<MapK
       fillOpacity: fill.opacity,
       strokeColor: stroke.color,
       strokeOpacity: stroke.opacity,
-      lineWidth: state.strokeWidth ?? 2,
+      lineWidth: state.strokeWidth ?? 1,
       // The overlay carries the outer boundary plus each hole ring (see
       // buildRings). MapKit's default 'nonzero' fill rule only cuts a hole when
       // its winding is opposite the outer ring's; the hole rings here can share
