@@ -89,7 +89,7 @@ export class MapKitCircleOverlayRenderer implements CircleOverlayRenderer<MapKit
       fillOpacity: fill.opacity,
       strokeColor: stroke.color,
       strokeOpacity: stroke.opacity,
-      lineWidth: state.strokeWidth ?? 2,
+      lineWidth: state.strokeWidth ?? 1,
     });
   }
 }
