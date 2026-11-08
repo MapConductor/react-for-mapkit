@@ -1,4 +1,11 @@
-import { createGeoPoint, type GeoPoint, type GeoPointInterface } from '@mapconductor/js-sdk-core';
+import {
+  compareOverlayStackKeys,
+  createGeoPoint,
+  type GeoPoint,
+  type GeoPointInterface,
+  type OverlayKind,
+  type OverlayStackKey,
+} from '@mapconductor/js-sdk-core';
 
 /** A CSS color split into an opaque color string and a separate opacity, the
  * shape MapKit JS's `Style` (fillColor + fillOpacity / strokeColor +
@@ -91,4 +98,34 @@ export function toUnwrappedCoordinates(points: readonly GeoPointInterface[]): ma
 
 export function toGeoPoint(coordinate: mapkit.Coordinate): GeoPoint {
   return createGeoPoint({ latitude: coordinate.latitude, longitude: coordinate.longitude });
+}
+
+// Stacking keys of the vector overlays this SDK added.
+const overlayStackKeys = new WeakMap<object, OverlayStackKey>();
+let overlayStackSequence = 0;
+
+/**
+ * Adds a polygon / circle / polyline overlay at its place in the shared stack
+ * (js-sdk-core OVERLAY_STACK_ORDER: polygon < circle < polyline, zIndex within the band, equal
+ * zIndexes in the order they were handed over).
+ *
+ * MapKit JS has no z-order for overlays: it draws them in the order of `map.overlays`. Overlays
+ * that belong above the new one are taken off and put back after it. Adding them in whatever
+ * order they arrived used to decide which kind was on top.
+ */
+export function addStackedOverlay(
+  map: mapkit.Map,
+  overlay: mapkit.Overlay,
+  kind: OverlayKind,
+  zIndex: number | null | undefined = 0,
+): void {
+  const key: OverlayStackKey = { kind, zIndex: zIndex ?? 0, sequence: ++overlayStackSequence };
+  overlayStackKeys.set(overlay, key);
+  const above = map.overlays.filter((other) => {
+    const otherKey = overlayStackKeys.get(other);
+    return otherKey != null && compareOverlayStackKeys(otherKey, key) > 0;
+  });
+  if (above.length > 0) map.removeOverlays(above);
+  map.addOverlay(overlay);
+  if (above.length > 0) map.addOverlays(above);
 }
