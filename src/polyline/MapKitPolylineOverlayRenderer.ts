@@ -7,7 +7,7 @@ import {
   type PolylineOverlayRenderer,
 } from '@mapconductor/js-sdk-core';
 import { MapKitViewHolder } from '../MapKitViewHolder';
-import { toCoordinates, toMapKitStyleColor } from '../helpers';
+import { toCoordinates, toMapKitStyleColor, addStackedOverlay } from '../helpers';
 import type { MapKitActualPolyline } from '../MapKitTypeAlias';
 
 /**
@@ -32,7 +32,7 @@ export class MapKitPolylineOverlayRenderer implements PolylineOverlayRenderer<Ma
       // map's single-tap coordinate (see MapKitViewController.handlePolylineClick).
       enabled: false,
     });
-    this.map.addOverlay(overlay);
+    addStackedOverlay(this.map, overlay, 'polyline', state.zIndex);
     return overlay;
   }
 
