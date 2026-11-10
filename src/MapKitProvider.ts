@@ -1,6 +1,6 @@
 import {
   MapProvider,
-  MarkerTilingOptions,
+  MarkerTilingOptions, PolylineTiler, PolylineTilingOptions,
   type GeoRectBounds,
   type MapConfig,
   type MapViewControllerInterface, toNativeRotation, } from '@mapconductor/js-sdk-core';
@@ -30,6 +30,11 @@ export interface MapKitConfig extends MapConfig {
   language?: string;
   mapDesignType?: MapKitMapDesignTypeInterface;
   markerTilingOptions?: MarkerTilingOptions;
+  /**
+   * When to draw polylines as raster tiles; {@link PolylineTilingOptions.Default} if omitted.
+   * The controller's `setPolylineTilingOptions` replaces it later.
+   */
+  polylineTilingOptions?: PolylineTilingOptions;
   minZoom?: number;
   maxZoom?: number;
   /** Restricts panning so the camera center cannot leave this rectangle. */
@@ -121,6 +126,9 @@ export class MapKitProvider extends MapProvider {
     const markerController = new MapKitMarkerController(new MapKitMarkerRenderer(holder), tilingOptions);
     const circleController = new MapKitCircleController(new MapKitCircleOverlayRenderer(holder));
     const polylineController = new MapKitPolylineController(new MapKitPolylineOverlayRenderer(holder));
+    // Many polylines are drawn as tiles by the tile service worker and shown as one raster
+    // layer (the view controller mounts it); taps still resolve against the original paths.
+    polylineController.tiler = new PolylineTiler(config.polylineTilingOptions ?? PolylineTilingOptions.Default);
     const polygonController = new MapKitPolygonController(new MapKitPolygonOverlayRenderer(holder));
     const groundImageController = new MapKitGroundImageController(new MapKitGroundImageOverlayRenderer(holder));
     const rasterLayerController = new MapKitRasterLayerController(new MapKitRasterLayerOverlayRenderer(holder));

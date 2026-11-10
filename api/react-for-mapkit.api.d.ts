@@ -1,4 +1,4 @@
-import { MapDesignTypeInterface, AttributionRule, MapConfig, MarkerTilingOptions, GeoRectBounds, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, WebMercatorZoomAltitudeConverter, AbstractMarkerOverlayRenderer, MarkerEntity, BitmapIcon, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleOverlayRenderer, CircleEntity, CircleAddParams, CircleChangeParams, CircleController, PolylineOverlayRenderer, PolylineEntity, PolylineAddParams, PolylineChangeParams, PolylineController, PolygonOverlayRenderer, PolygonEntity, PolygonAddParams, PolygonChangeParams, PolygonController, GroundImageState, GroundImageOverlayRenderer, GroundImageEntity, GroundImageAddParams, GroundImageChangeParams, GroundImageController, RasterLayerOverlayRenderer, RasterLayerEntity, RasterLayerAddParams, RasterLayerChangeParams, MapCameraPosition, RasterLayerController, RasterHeaderSupport, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, MapViewStateInterface, MapViewState, MapViewBaseProps, VisibleRegion } from '@mapconductor/js-sdk-core';
+import { MapDesignTypeInterface, AttributionRule, MapConfig, MarkerTilingOptions, PolylineTilingOptions, GeoRectBounds, MapProvider, MapViewControllerInterface, MapViewHolderBase, GeoPointInterface, Offset, GeoPoint, WebMercatorZoomAltitudeConverter, AbstractMarkerOverlayRenderer, MarkerEntity, BitmapIcon, AddParams, ChangeParams, AbstractMarkerController, RasterLayerState, MarkerState, CircleOverlayRenderer, CircleEntity, CircleAddParams, CircleChangeParams, CircleController, PolylineOverlayRenderer, PolylineEntity, PolylineAddParams, PolylineChangeParams, PolylineController, PolygonOverlayRenderer, PolygonEntity, PolygonAddParams, PolygonChangeParams, PolygonController, GroundImageState, GroundImageOverlayRenderer, GroundImageEntity, GroundImageAddParams, GroundImageChangeParams, GroundImageController, RasterLayerOverlayRenderer, RasterLayerEntity, RasterLayerAddParams, RasterLayerChangeParams, MapCameraPosition, RasterLayerController, RasterHeaderSupport, BaseMapViewController, MarkerCapable, CircleCapable, PolylineCapable, PolygonCapable, GroundImageCapable, RasterLayerCapable, MapUISettings, OnMapInitializedHandler, OnMarkerEventHandler, MarkerAnimationOverlayHost, MapViewStateInterface, MapViewState, MapViewBaseProps, VisibleRegion } from '@mapconductor/js-sdk-core';
 import React from 'react';
 
 /**
@@ -38,6 +38,11 @@ interface MapKitConfig extends MapConfig {
     language?: string;
     mapDesignType?: MapKitMapDesignTypeInterface;
     markerTilingOptions?: MarkerTilingOptions;
+    /**
+     * When to draw polylines as raster tiles; {@link PolylineTilingOptions.Default} if omitted.
+     * The controller's `setPolylineTilingOptions` replaces it later.
+     */
+    polylineTilingOptions?: PolylineTilingOptions;
     minZoom?: number;
     maxZoom?: number;
     /** Restricts panning so the camera center cannot leave this rectangle. */
@@ -436,6 +441,12 @@ interface MapKitMapViewProps extends MapViewBaseProps<MapKitViewStateInterface> 
     style?: React.CSSProperties;
     containerStyle?: React.CSSProperties;
     markerTilingOptions?: MarkerTilingOptions;
+    /**
+     * When to draw polylines as raster tiles ({@link PolylineTilingOptions.Default} if omitted).
+     * Read when the map is created; a later value applies from the next time the polylines are
+     * handed to the map.
+     */
+    polylineTilingOptions?: PolylineTilingOptions;
     minZoom?: number;
     maxZoom?: number;
     /** Restricts panning so the camera center cannot leave this rectangle. */
@@ -446,7 +457,7 @@ interface MapKitMapViewProps extends MapViewBaseProps<MapKitViewStateInterface> 
 /**
  * Apple MapKit React component. Web port of `MapKitMapView` (MapKitMapView.swift).
  */
-declare function MapKitMapView({ state, mapStyle, onStyleDiagnostics, className, style, containerStyle, markerTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: MapKitMapViewProps): React.JSX.Element;
+declare function MapKitMapView({ state, mapStyle, onStyleDiagnostics, className, style, containerStyle, markerTilingOptions, polylineTilingOptions, minZoom, maxZoom, restrictBounds, cameraRestriction, onError, onMapLoaded, onMapClick, onMapLongClick, onCameraMoveStart, onCameraMove, onCameraMoveEnd, children, }: MapKitMapViewProps): React.JSX.Element;
 
 interface MapKitLoadOptions {
     /** A static MapKit JS authorization token (JWT). */
