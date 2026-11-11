@@ -189,3 +189,22 @@ test('renderer stacks annotations by zIndex, then south, whatever the add order'
     // Later on top: north, then south, then the zIndex 1 marker.
     assert.deepEqual(map.annotations.map((a) => a.data.markerId), ['north', 'south', 'front']);
 });
+
+test('renderer re-stacks annotations when the map turns: lower on screen in front', async () => {
+    const map = createFakeMap();
+    map.center = { latitude: 35, longitude: 139.7 };
+    const r = new MapKitMarkerRenderer({ map });
+    const front = createMarkerState({ id: 'front', position: gp(35.0, 139.7), zIndex: 1 });
+    const west = createMarkerState({ id: 'west', position: gp(35.0, 139.69) });
+    const east = createMarkerState({ id: 'east', position: gp(35.0, 139.71) });
+    await r.onAdd([front, east, west].map((state) => ({ state, bitmapIcon: bitmap({ x: 0.5, y: 1 }) })));
+    await r.onPostProcess();
+    // North up, same row: the western (left) one in front.
+    assert.deepEqual(map.annotations.map((a) => a.data.markerId), ['east', 'west', 'front']);
+    // rotation 90 turns the map clockwise: north goes right and east goes down,
+    // so the eastern one comes in front; zIndex 1 stays on top.
+    map.rotation = 90;
+    map.dispatch('region-change-end');
+    await Promise.resolve();
+    assert.deepEqual(map.annotations.map((a) => a.data.markerId), ['west', 'east', 'front']);
+});

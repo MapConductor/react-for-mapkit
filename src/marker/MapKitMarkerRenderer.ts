@@ -1,7 +1,8 @@
 import {
   AbstractMarkerOverlayRenderer,
   createDefaultIcon,
-  markerDrawOrder,
+  MarkerDrawOrderView,
+  toNativeHeading,
   MarkerEntity,
   type AddParams,
   type BitmapIcon,
@@ -23,7 +24,15 @@ export class MapKitMarkerRenderer extends AbstractMarkerOverlayRenderer<MapKitVi
   constructor(holder: MapKitViewHolder) {
     super({ holder });
     this.supportsAnimationOverlay = true;
+    // Re-sorting reassigns the whole annotation list, so the order catches up
+    // once the region settles rather than following the rotation.
+    holder.map.addEventListener('region-change-end', () => this.followHeading());
   }
+
+  /** @internal */
+  private readonly drawOrder = new MarkerDrawOrderView();
+  /** Each annotation's zIndex, to recompute its draw order when the map turns. @internal */
+  private readonly zIndexes = new WeakMap<MapKitActualMarker, number | null>();
 
   /** Each annotation's place in the shared marker draw order (see markerDrawOrder). @internal */
   private readonly drawOrders = new WeakMap<MapKitActualMarker, number>();
@@ -31,11 +40,28 @@ export class MapKitMarkerRenderer extends AbstractMarkerOverlayRenderer<MapKitVi
   private orderDirty = false;
 
   /** @internal */
-  private setDrawOrder(annotation: MapKitActualMarker, zIndex: number | null, position: GeoPoint): void {
-    const order = markerDrawOrder(zIndex, position);
+  private setDrawOrder(
+    annotation: MapKitActualMarker,
+    zIndex: number | null,
+    position: { latitude: number; longitude: number },
+  ): void {
+    this.zIndexes.set(annotation, zIndex);
+    const order = this.drawOrder.order(zIndex, position);
     if (this.drawOrders.get(annotation) === order) return;
     this.drawOrders.set(annotation, order);
     this.orderDirty = true;
+  }
+
+  /** Re-sorts after the map turns: among equal zIndex, the one lower on screen is in front. @internal */
+  private followHeading(): void {
+    // map.rotation turns the map clockwise, like MapConductor's bearing (see
+    // MapKitCameraState.setRotation), so it is the opposite of a heading.
+    if (!this.drawOrder.update(toNativeHeading(this.map.rotation), this.map.center?.longitude)) return;
+    for (const annotation of this.map.annotations as MapKitActualMarker[]) {
+      if (!this.drawOrders.has(annotation)) continue;
+      this.setDrawOrder(annotation, this.zIndexes.get(annotation) ?? null, annotation.coordinate);
+    }
+    void this.onPostProcess();
   }
 
   private get map(): mapkit.Map {
@@ -88,7 +114,8 @@ export class MapKitMarkerRenderer extends AbstractMarkerOverlayRenderer<MapKitVi
     // MapKit JS stacks annotations in the order they were added (later on top)
     // and has no z-order option; the annotation's `element` is only a slot
     // placeholder, so a CSS z-index on it does nothing. When the shared draw
-    // order (zIndex, then south, then west) no longer matches, re-add this
+    // order (zIndex, then lower on the rotated screen, then further left) no
+    // longer matches, re-add this
     // renderer's annotations in that order. Only when needed: re-adding every
     // marker on each composition would be wasted work. The list is assigned as
     // a whole: removeAnnotations + addAnnotations of the same objects leaves
@@ -101,6 +128,15 @@ export class MapKitMarkerRenderer extends AbstractMarkerOverlayRenderer<MapKitVi
     if (sorted.every((annotation, index) => annotation === ours[index])) return;
     const others = this.map.annotations.filter(annotation => !this.drawOrders.has(annotation as MapKitActualMarker));
     this.map.annotations = [...others, ...sorted];
+    // Assigning the list reorders it, but MapKit JS restacks the page only when
+    // an annotation is added (in the same tick that worked by luck: right after
+    // the composition's adds). Re-adding the topmost one keeps it last and makes
+    // the new order show now. A selected one is left alone so it stays selected.
+    const top = sorted[sorted.length - 1];
+    if (!top.selected) {
+      this.map.removeAnnotation(top);
+      this.map.addAnnotation(top);
+    }
   }
 
   setMarkerPosition(entity: MarkerEntity<MapKitActualMarker>, position: GeoPoint): void {
