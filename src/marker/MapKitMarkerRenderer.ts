@@ -1,6 +1,7 @@
 import {
   AbstractMarkerOverlayRenderer,
   createDefaultIcon,
+  markerDrawOrder,
   MarkerEntity,
   type AddParams,
   type BitmapIcon,
@@ -24,6 +25,19 @@ export class MapKitMarkerRenderer extends AbstractMarkerOverlayRenderer<MapKitVi
     this.supportsAnimationOverlay = true;
   }
 
+  /** Each annotation's place in the shared marker draw order (see markerDrawOrder). @internal */
+  private readonly drawOrders = new WeakMap<MapKitActualMarker, number>();
+  /** @internal */
+  private orderDirty = false;
+
+  /** @internal */
+  private setDrawOrder(annotation: MapKitActualMarker, zIndex: number | null, position: GeoPoint): void {
+    const order = markerDrawOrder(zIndex, position);
+    if (this.drawOrders.get(annotation) === order) return;
+    this.drawOrders.set(annotation, order);
+    this.orderDirty = true;
+  }
+
   private get map(): mapkit.Map {
     return this.holder.map;
   }
@@ -34,6 +48,7 @@ export class MapKitMarkerRenderer extends AbstractMarkerOverlayRenderer<MapKitVi
   ): MapKitActualMarker | null {
     const annotation = createMapConductorPointAnnotation(entity.state, bitmapIcon);
     this.map.addAnnotation(annotation);
+    this.setDrawOrder(annotation, entity.state.zIndex, entity.state.position);
     return annotation;
   }
 
@@ -42,6 +57,7 @@ export class MapKitMarkerRenderer extends AbstractMarkerOverlayRenderer<MapKitVi
   // updated in place; an icon change is handled by the controller's remove/add.
   updateMarker(annotation: MapKitActualMarker, entity: MarkerEntity<MapKitActualMarker>): void {
     annotation.coordinate = toCoordinate(entity.state.position);
+    this.setDrawOrder(annotation, entity.state.zIndex, entity.state.position);
   }
 
   removeMarker(annotation: MapKitActualMarker): void {
@@ -68,10 +84,29 @@ export class MapKitMarkerRenderer extends AbstractMarkerOverlayRenderer<MapKitVi
     });
   }
 
-  async onPostProcess(): Promise<void> {}
+  async onPostProcess(): Promise<void> {
+    // MapKit JS stacks annotations in the order they were added (later on top)
+    // and has no z-order option; the annotation's `element` is only a slot
+    // placeholder, so a CSS z-index on it does nothing. When the shared draw
+    // order (zIndex, then south, then west) no longer matches, re-add this
+    // renderer's annotations in that order. Only when needed: re-adding every
+    // marker on each composition would be wasted work. The list is assigned as
+    // a whole: removeAnnotations + addAnnotations of the same objects leaves
+    // them detached from the map.
+    if (!this.orderDirty) return;
+    this.orderDirty = false;
+    const ours = this.map.annotations.filter(annotation => this.drawOrders.has(annotation as MapKitActualMarker)) as MapKitActualMarker[];
+    if (ours.length <= 1) return;
+    const sorted = [...ours].sort((a, b) => (this.drawOrders.get(a) ?? 0) - (this.drawOrders.get(b) ?? 0));
+    if (sorted.every((annotation, index) => annotation === ours[index])) return;
+    const others = this.map.annotations.filter(annotation => !this.drawOrders.has(annotation as MapKitActualMarker));
+    this.map.annotations = [...others, ...sorted];
+  }
 
   setMarkerPosition(entity: MarkerEntity<MapKitActualMarker>, position: GeoPoint): void {
-    if (entity.marker) entity.marker.coordinate = toCoordinate(position);
+    if (!entity.marker) return;
+    entity.marker.coordinate = toCoordinate(position);
+    this.setDrawOrder(entity.marker, entity.state.zIndex, position);
   }
 
   override setMarkerVisible(entity: MarkerEntity<MapKitActualMarker>, visible: boolean): void {

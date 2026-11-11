@@ -177,3 +177,15 @@ test('non-draggable markers get no drag listeners', async () => {
     const [ann] = f.map.annotations;
     assert.deepEqual(Object.keys(ann.listeners), ['select']);
 });
+
+test('renderer stacks annotations by zIndex, then south, whatever the add order', async () => {
+    const map = createFakeMap();
+    const r = new MapKitMarkerRenderer({ map });
+    const front = createMarkerState({ id: 'front', position: gp(35.0, 139.7), zIndex: 1 });
+    const north = createMarkerState({ id: 'north', position: gp(35.01, 139.7) });
+    const south = createMarkerState({ id: 'south', position: gp(34.99, 139.7) });
+    await r.onAdd([front, north, south].map((state) => ({ state, bitmapIcon: bitmap({ x: 0.5, y: 1 }) })));
+    await r.onPostProcess();
+    // Later on top: north, then south, then the zIndex 1 marker.
+    assert.deepEqual(map.annotations.map((a) => a.data.markerId), ['north', 'south', 'front']);
+});
