@@ -1,4 +1,4 @@
-import { PolygonTiler, POLYGON_TILE_LAYER_ID, polygonTileRasterLayerState, POLYLINE_TILE_LAYER_ID, polylineTileRasterLayerState, CIRCLE_TILE_LAYER_ID, circleTileRasterLayerState } from '@mapconductor/js-sdk-core';
+import { MapPaddings, PolygonTiler, POLYGON_TILE_LAYER_ID, polygonTileRasterLayerState, POLYLINE_TILE_LAYER_ID, polylineTileRasterLayerState, CIRCLE_TILE_LAYER_ID, circleTileRasterLayerState } from '@mapconductor/js-sdk-core';
 import {
   BaseMapViewController,
   MapUISettingsDiagnostics,
@@ -292,7 +292,9 @@ export class MapKitViewController
       bearing: current.bearing,
     });
     if (!fit) return Promise.resolve(false);
-    const target = current.copy({ position: fit.center, zoom: fit.zoom });
+    // Paddings: none. `current` carries the last move's paddings, and copying
+    // them would shift the fitted center by them (MapLibre clears them on a fit).
+    const target = current.copy({ position: fit.center, zoom: fit.zoom, paddings: MapPaddings.Zeros });
     // fitBounds は core のインタフェース上 duration を受け取らない（android-sdk 揃え）。
     // snapZoom:false — keep the fractional fit zoom so `padding` is honored.
     return this.camera.commit(target, { animated: false, snapZoom: false });
