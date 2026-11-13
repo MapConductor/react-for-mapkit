@@ -4,7 +4,7 @@ import {
   createMapCameraPosition,
   Earth,
   type MapCameraPosition,
-  type VisibleRegion, toNativeRotation, bearingFromNativeRotation, } from '@mapconductor/js-sdk-core';
+  type VisibleRegion, toNativeRotation, bearingFromNativeRotation, MapPaddings, paddedCameraCenter, paddedCameraTarget, } from '@mapconductor/js-sdk-core';
 import type { MapKitViewHolder } from './MapKitViewHolder';
 import type { MapKitZoomAltitudeConverter } from './zoom/ZoomAltitudeConverter';
 
@@ -29,6 +29,12 @@ export interface MapKitCameraDeps {
 
 export class MapKitCameraState {
   private lastCameraTarget: MapCameraPosition | null = null;
+  /**
+   * 最後に動かしたときの `MapCameraPosition.paddings`。MapKit JS は傾かない平面の
+   * 地図なので、中心を画素ぶんずらすだけで正確に再現できる（map.padding は
+   * region の当てはめにも効いてしまい、意味が揃わないので使わない）。
+   */
+  private cameraPaddings: MapPaddings | null = null;
   private initialAltitudeCorrected = false;
   private initialAltitudeRafId: number | null = null;
 
@@ -48,11 +54,13 @@ export class MapKitCameraState {
    * false to keep its fractional fit zoom so `padding` is honored.
    */
   commit(
-    position: MapCameraPosition,
+    requested: MapCameraPosition,
     { animated, duration, snapZoom = true }: { animated: boolean; duration?: number; snapZoom?: boolean },
   ): Promise<boolean> {
-    this.logicalTiltHint = position.tilt;
-    this.lastCameraTarget = position;
+    this.logicalTiltHint = requested.tilt;
+    this.lastCameraTarget = requested;
+    const paddingZoom = snapZoom ? snapZoomToGoogle(requested.zoom) : requested.zoom;
+    const position = this.withPaddedCenter(requested, paddingZoom);
     // Before the map has laid out we can't derive the region from the viewport;
     // approximate with the constant converter. The initial-altitude correction
     // re-applies this exactly once the map has a size.
@@ -67,6 +75,7 @@ export class MapKitCameraState {
         this.deps.map.cameraDistance = this.deps.converter.zoomLevelToAltitude({ zoomLevel: fallbackZoom, latitude: position.position.latitude, tilt: 0 });
       }
       this.setRotation(toNativeRotation(position.bearing));
+      this.correctPaddedCenter(requested, paddingZoom);
       return Promise.resolve(true);
     }
 
@@ -86,7 +95,23 @@ export class MapKitCameraState {
     if (Math.abs(normalizeAngleDelta(targetRotation - this.deps.map.rotation)) > 0.01) {
       this.deps.map.setRotationAnimated(targetRotation, true);
     }
-    return new Promise((resolve) => setTimeout(() => resolve(true), duration ?? 500));
+    return new Promise((resolve) => setTimeout(() => {
+      this.correctPaddedCenter(requested, paddingZoom);
+      resolve(true);
+    }, duration ?? 500));
+  }
+
+  /**
+   * 回転が効かない環境（rotation を当てても 0 のまま）では、要求した bearing で
+   * ずらした中心が合わない。実際の向きで中心をずらし直す。
+   */
+  private correctPaddedCenter(requested: MapCameraPosition, zoom: number): void {
+    const paddings = this.cameraPaddings;
+    if (!paddings) return;
+    const actual = bearingFromNativeRotation(this.deps.map.rotation);
+    if (Math.abs(normalizeAngleDelta(actual - requested.bearing)) < 0.5) return;
+    const center = paddedCameraCenter(requested.position, this.paddingParams(paddings, zoom, actual));
+    this.deps.map.center = new mapkit.Coordinate(center.latitude, center.longitude);
   }
 
   /**
@@ -121,13 +146,38 @@ export class MapKitCameraState {
       latitude: center.latitude,
       tilt: 0,
     });
+    const bearing = bearingFromNativeRotation(this.deps.map.rotation);
+    const live = createGeoPoint({ latitude: center.latitude, longitude: center.longitude });
     return createMapCameraPosition({
-      position: createGeoPoint({ latitude: center.latitude, longitude: center.longitude }),
+      position: this.cameraPaddings ? paddedCameraTarget(live, this.paddingParams(this.cameraPaddings, zoom, bearing)) : live,
       zoom,
-      bearing: bearingFromNativeRotation(this.deps.map.rotation),
+      bearing,
       tilt: this.logicalTiltHint ?? 0,
+      paddings: this.cameraPaddings ?? MapPaddings.Zeros,
+      // MapKit JS は傾かない。
+      fov: null,
       visibleRegion: this.readVisibleRegion() ?? undefined,
     });
+  }
+
+  /** パディングを除いた領域の中央に target が来るよう、送る中心をずらす。 */
+  private withPaddedCenter(position: MapCameraPosition, zoom: number): MapCameraPosition {
+    const paddings = position.paddings ?? this.cameraPaddings;
+    this.cameraPaddings = paddings;
+    if (!paddings) return position;
+    return position.copy({ position: paddedCameraCenter(position.position, this.paddingParams(paddings, zoom, position.bearing)) });
+  }
+
+  private paddingParams(paddings: MapPaddings, zoom: number, bearing: number) {
+    const element = this.deps.holder.mapView;
+    return {
+      zoom,
+      tilt: 0,
+      bearing,
+      paddings,
+      fov: null,
+      viewport: { width: element.clientWidth, height: element.clientHeight },
+    };
   }
 
   /**

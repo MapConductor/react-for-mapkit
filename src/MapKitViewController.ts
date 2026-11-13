@@ -1,3 +1,4 @@
+import { MapPaddings, PolygonTiler, POLYGON_TILE_LAYER_ID, polygonTileRasterLayerState, POLYLINE_TILE_LAYER_ID, polylineTileRasterLayerState, CIRCLE_TILE_LAYER_ID, circleTileRasterLayerState } from '@mapconductor/js-sdk-core';
 import {
   BaseMapViewController,
   MapUISettingsDiagnostics,
@@ -116,9 +117,35 @@ export class MapKitViewController
       logicalTiltHint,
     );
     // Tiled markers render into a raster overlay driven by the raster controller.
+    // Many polygons are drawn as tiles by the tile service worker and shown
+    // as one raster layer; taps still resolve against the original shapes.
+    this.polygonController.tiler = new PolygonTiler();
+    this.polygonController.tiler.onTemplate = async (template, tileSize) => {
+      if (template) await this.rasterLayerController.upsert(polygonTileRasterLayerState(template, tileSize));
+      else await this.rasterLayerController.removeById(POLYGON_TILE_LAYER_ID);
+    };
+    // Many polylines are drawn as tiles too (the tiler is set by the provider, with the map's
+    // PolylineTilingOptions) and shown as one raster layer, in the polyline band.
+    if (this.polylineController.tiler) {
+      this.polylineController.tiler.onTemplate = async (template, tileSize) => {
+        if (template) await this.rasterLayerController.upsert(polylineTileRasterLayerState(template, tileSize));
+        else await this.rasterLayerController.removeById(POLYLINE_TILE_LAYER_ID);
+      };
+    }
+    // Many circles are drawn as tiles too (the tiler is set by the provider, with the map's
+    // CircleTilingOptions) and shown as one raster layer, at the bottom of the circle band.
+    if (this.circleController.tiler) {
+      this.circleController.tiler.onTemplate = async (template, tileSize) => {
+        if (template) await this.rasterLayerController.upsert(circleTileRasterLayerState(template, tileSize));
+        else await this.rasterLayerController.removeById(CIRCLE_TILE_LAYER_ID);
+      };
+    }
+    // upsert / removeById, not composition / clear: those replace every raster
+    // layer, so marker tiles removed the app's RasterLayers and polygon tiles
+    // (and the app's RasterLayers removed the marker tiles).
     this.markerController.onRasterLayerUpdate = async (state) => {
-      if (state) await this.rasterLayerController.composition([state]);
-      else await this.rasterLayerController.clear();
+      if (state) await this.rasterLayerController.upsert(state);
+      else await this.rasterLayerController.removeById('mc-marker-tiles');
     };
     this.setupEventListeners();
     // MapKit JS maps are usable immediately after construction; announce
@@ -265,7 +292,9 @@ export class MapKitViewController
       bearing: current.bearing,
     });
     if (!fit) return Promise.resolve(false);
-    const target = current.copy({ position: fit.center, zoom: fit.zoom });
+    // Paddings: none. `current` carries the last move's paddings, and copying
+    // them would shift the fitted center by them (MapLibre clears them on a fit).
+    const target = current.copy({ position: fit.center, zoom: fit.zoom, paddings: MapPaddings.Zeros });
     // fitBounds は core のインタフェース上 duration を受け取らない（android-sdk 揃え）。
     // snapZoom:false — keep the fractional fit zoom so `padding` is honored.
     return this.camera.commit(target, { animated: false, snapZoom: false });
@@ -317,12 +346,14 @@ export class MapKitViewController
   // --- Lifecycle ---
 
   async clearOverlays(): Promise<void> {
-    await this.markerController.clear();
-    await this.circleController.clear();
-    await this.polylineController.clear();
-    await this.polygonController.clear();
-    await this.groundImageController.clear();
-    await this.rasterLayerController.clear();
+    await this.clearOverlayControllers([
+      this.markerController,
+      this.circleController,
+      this.polylineController,
+      this.polygonController,
+      this.groundImageController,
+      this.rasterLayerController,
+    ]);
   }
 
   destroy(): void {

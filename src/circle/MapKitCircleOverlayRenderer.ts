@@ -8,7 +8,7 @@ import {
   type CircleOverlayRenderer,
 } from '@mapconductor/js-sdk-core';
 import { MapKitViewHolder } from '../MapKitViewHolder';
-import { toCoordinates, toMapKitStyleColor } from '../helpers';
+import { toCoordinates, toMapKitStyleColor, addStackedOverlay } from '../helpers';
 import type { MapKitActualCircle } from '../MapKitTypeAlias';
 
 /**
@@ -41,7 +41,7 @@ export class MapKitCircleOverlayRenderer implements CircleOverlayRenderer<MapKit
       // MapKitViewController.handleCircleClick).
       enabled: false,
     });
-    this.map.addOverlay(overlay);
+    addStackedOverlay(this.map, overlay, 'circle', state.zIndex);
     return overlay;
   }
 
@@ -89,7 +89,7 @@ export class MapKitCircleOverlayRenderer implements CircleOverlayRenderer<MapKit
       fillOpacity: fill.opacity,
       strokeColor: stroke.color,
       strokeOpacity: stroke.opacity,
-      lineWidth: state.strokeWidth ?? 2,
+      lineWidth: state.strokeWidth ?? 1,
     });
   }
 }
