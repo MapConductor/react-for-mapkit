@@ -4,6 +4,71 @@
 
 MapConductor React SDK の Apple MapKit JS プロバイダです。Apple MapKit JS で MapConductor の地図を描画しますが、MapConductor のプロバイダ非依存なカメラ・マーカー・オーバーレイ API を通すため、同じアプリケーションコードが Google Maps、MapLibre、Mapbox、Leaflet、OpenLayers、ArcGIS、Cesium、HERE でもそのまま動作します。
 
+## デモ
+
+[![MapKit の店舗マップのサンプル](https://raw.githubusercontent.com/MapConductor/react-for-mapkit/main/docs/images/demo.jpg)](https://demo-react.mapconductor.com/mapkit/map/en)
+
+[ライブデモ](https://demo-react.mapconductor.com/mapkit/map/en)で動かせます。同じ店舗マップがどのプロバイダでも動き、画面上で切り替えられます。店舗を 3 つに絞ったコード:
+
+```tsx
+import { useMemo, useState } from 'react';
+import {
+  createGeoPoint,
+  createMapCameraPosition,
+  createMarkerState,
+  type MarkerState,
+} from '@mapconductor/js-sdk-core';
+import { InfoBubble, Markers } from '@mapconductor/js-sdk-react';
+import { MapKitMapDesign, MapKitMapView, useMapKitViewState } from '@mapconductor/react-for-mapkit';
+
+const STORES = [
+  { id: 'waikiki', name: 'Waikiki', latitude: 21.2793, longitude: -157.8292 },
+  { id: 'kailua', name: 'Kailua', latitude: 21.3972, longitude: -157.7394 },
+  { id: 'haleiwa', name: 'Haleiwa', latitude: 21.5928, longitude: -158.1034 },
+];
+
+const INITIAL_CAMERA = createMapCameraPosition({
+  position: createGeoPoint({ latitude: 21.38, longitude: -157.93 }),
+  zoom: 10,
+});
+
+export default function App() {
+  const mapViewState = useMapKitViewState({
+    token: 'YOUR_MAPKIT_TOKEN',
+    mapDesignType: MapKitMapDesign.Standard,
+    cameraPosition: INITIAL_CAMERA,
+  });
+  const [selected, setSelected] = useState<MarkerState | null>(null);
+  const markers = useMemo(
+    () =>
+      STORES.map(store =>
+        createMarkerState({
+          id: store.id,
+          position: createGeoPoint({ latitude: store.latitude, longitude: store.longitude }),
+          extra: store,
+          onClick: marker => setSelected(marker),
+        }),
+      ),
+    [],
+  );
+
+  return (
+    <div style={{ width: '100%', height: '100vh' }}>
+      <MapKitMapView state={mapViewState} onMapClick={() => setSelected(null)}>
+        <Markers states={markers} />
+        {selected && (
+          <InfoBubble marker={selected}>
+            <strong>{(selected.extra as (typeof STORES)[number]).name}</strong>
+          </InfoBubble>
+        )}
+      </MapKitMapView>
+    </div>
+  );
+}
+```
+
+`YOUR_MAPKIT_TOKEN` はご自身のキーに置き換えてください。
+
 ## インストール
 
 ```shell
@@ -18,7 +83,7 @@ npm install @mapconductor/react-for-mapkit @mapconductor/js-sdk-core @mapconduct
 
 MapKit JS は実行時に Apple の CDN から読み込まれ、認可トークン(MapKit JS の JWT)が必要です。トークンはビューステート経由で渡します。
 
-![](https://raw.githubusercontent.com/mapconductor/react-for-mapkit/docs/images/hello-map.jpg)
+![](https://raw.githubusercontent.com/MapConductor/react-for-mapkit/main/docs/images/hello-map.jpg)
 
 ## Hello Map チュートリアル
 
